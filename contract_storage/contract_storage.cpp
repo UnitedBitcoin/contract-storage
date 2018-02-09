@@ -3,6 +3,7 @@
 #include <contract_storage/exceptions.hpp>
 #include <fc/io/json.hpp>
 #include <fc/crypto/base64.hpp>
+#include <boost/scope_exit.hpp>
 
 namespace contract
 {
@@ -171,6 +172,42 @@ namespace contract
 		{
 			if (!_db)
 				BOOST_THROW_EXCEPTION(ContractStorageException("contract storage db not opened"));
+			if(!_sql_db)
+				BOOST_THROW_EXCEPTION(ContractStorageException("contract storage sql db not opened"));
+		}
+
+		void ContractStorageService::begin_sql_transaction()
+		{
+			check_db();
+			char *err;
+			if (sqlite3_exec(_sql_db, "BEGIN", nullptr, nullptr, &err) != SQLITE_OK)
+			{
+				std::string err_str = std::string("contract sql transaction begin error ") + err;
+				sqlite3_free(err);
+				BOOST_THROW_EXCEPTION(ContractStorageException(err_str));
+			}
+		}
+		void ContractStorageService::commit_sql_transaction()
+		{
+			check_db();
+			char *err;
+			if (sqlite3_exec(_sql_db, "COMMIT", nullptr, nullptr, &err) != SQLITE_OK)
+			{
+				std::string err_str = std::string("contract sql transaction commit error ") + err;
+				sqlite3_free(err);
+				BOOST_THROW_EXCEPTION(ContractStorageException(err_str));
+			}
+		}
+		void ContractStorageService::rollback_sql_transaction()
+		{
+			check_db();
+			char *err;
+			if (sqlite3_exec(_sql_db, "ROLLBACK", nullptr, nullptr, &err) != SQLITE_OK)
+			{
+				std::string err_str = std::string("contract sql transaction rollback error ") + err;
+				sqlite3_free(err);
+				BOOST_THROW_EXCEPTION(ContractStorageException(err_str));
+			}
 		}
 
 		ContractInfoP ContractStorageService::get_contract_info(const AddressType& contract_id) const
@@ -203,6 +240,18 @@ namespace contract
 		ContractCommitId ContractStorageService::save_contract_info(ContractInfoP contract_info)
 		{
 			check_db();
+			bool success = false;
+			begin_sql_transaction();
+			BOOST_SCOPE_EXIT(&success, &_sql_db, &commit_sql_transaction, &rollback_sql_transaction) {
+				if (success)
+				{
+					commit_sql_transaction();
+				}
+				else
+				{
+					rollback_sql_transaction();
+				}
+			} BOOST_SCOPE_EXIT_END
 			auto key = make_contract_info_key(contract_info->id);
 			leveldb::ReadOptions read_options;
 			std::string old_value;
@@ -228,6 +277,7 @@ namespace contract
 			add_commit_info(commitId, CONTRACT_INFO_CHANGE_TYPE, contract_info_diff_str, contract_info->id);
 			if(!_db->Put(write_options, root_state_hash_key, root_state_hash).ok())
 				BOOST_THROW_EXCEPTION(ContractStorageException("update root state hash error"));
+			success = true;
 			return commitId;
 		}
 
@@ -293,8 +343,18 @@ namespace contract
 			// check commitId not conflict
 			if(get_commit_info(commitId))
 				BOOST_THROW_EXCEPTION(ContractStorageException("same commitId existed before"));
-			// TODO: transactional
-
+			bool success = false;
+			begin_sql_transaction();
+			BOOST_SCOPE_EXIT(&success, &_sql_db, &commit_sql_transaction, &rollback_sql_transaction) {
+				if (success)
+				{
+					commit_sql_transaction();
+				}
+				else
+				{
+					rollback_sql_transaction();
+				}
+			} BOOST_SCOPE_EXIT_END
 			// merge change to leveldb
 			leveldb::ReadOptions read_options;
 			leveldb::WriteOptions write_options;
@@ -362,6 +422,7 @@ namespace contract
 			add_commit_info(commitId, CONTRACT_STORAGE_CHANGE_TYPE, jsondiff::json_dumps(diff_str), "");
 			if (!_db->Put(write_options, root_state_hash_key, root_state_hash).ok())
 				BOOST_THROW_EXCEPTION(ContractStorageException("update root state hash error"));
+			success = true;
 			return commitId;
 		}
 
@@ -396,9 +457,21 @@ namespace contract
 			if(!commit_info && dest_commit_id!=EMPTY_COMMIT_ID)
 				BOOST_THROW_EXCEPTION(ContractStorageException(std::string("Can't find commit ") + dest_commit_id));
 			// find all commits after this commit
+			bool success = false;
+			begin_sql_transaction();
+			BOOST_SCOPE_EXIT(&success, &_sql_db, &commit_sql_transaction, &rollback_sql_transaction) {
+				if (success)
+				{
+					commit_sql_transaction();
+				}
+				else
+				{
+					rollback_sql_transaction();
+				}
+			} BOOST_SCOPE_EXIT_END
+			char *errMsg;
 			leveldb::WriteOptions write_options;
 			leveldb::ReadOptions read_options;
-			char *errMsg;
 			jsondiff::JsonArray records;
 			std::string query_sql;
 			if (dest_commit_id == EMPTY_COMMIT_ID)
@@ -544,6 +617,7 @@ namespace contract
 			const auto& root_state_hash = dest_commit_id;
 			if (!_db->Put(write_options, root_state_hash_key, root_state_hash).ok())
 				BOOST_THROW_EXCEPTION(ContractStorageException("update root state hash error"));
+			success = true;
 		}
 
 	}
