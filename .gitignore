@@ -265,4 +265,5 @@ __pycache__/
 
 /*.vcxproj
 /*.vcxproj.*
+/*.sln
 /bin

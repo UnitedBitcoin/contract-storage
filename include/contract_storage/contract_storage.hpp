@@ -59,6 +59,9 @@ namespace contract
 		private:
 			// check db opened? if not, throw boost::exception
 			void check_db() const;
+			void begin_sql_transaction();
+			void commit_sql_transaction();
+			void rollback_sql_transaction();
 			// init commits sql table
 			void init_commits_table();
 			ContractCommitInfoP get_commit_info(const ContractCommitId& commit_id);
