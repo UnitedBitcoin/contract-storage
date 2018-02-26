@@ -34,6 +34,7 @@ namespace contract
 			
 			// these apis may throws boost::exception
 			void open();
+			void close();
 
 			ContractInfoP get_contract_info(const AddressType& contract_id) const;
 			ContractCommitId save_contract_info(ContractInfoP contract_info);

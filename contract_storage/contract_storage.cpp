@@ -30,10 +30,7 @@ namespace contract
 		}
 		ContractStorageService::~ContractStorageService()
 		{
-			if (_db)
-				delete _db;
-			if (_sql_db)
-				sqlite3_close(_sql_db);
+			close();
 		}
 
 		void ContractStorageService::open()
@@ -51,6 +48,20 @@ namespace contract
 				assert(status == SQLITE_OK);
 				// init tables
 				this->init_commits_table();
+			}
+		}
+
+		void ContractStorageService::close()
+		{
+			if (_db)
+			{
+				delete _db;
+				_db = nullptr;
+			}
+			if (_sql_db)
+			{
+				sqlite3_close(_sql_db);
+				_sql_db = nullptr;
 			}
 		}
 
