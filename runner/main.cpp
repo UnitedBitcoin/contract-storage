@@ -53,6 +53,8 @@ int main(int argc, char **argv)
 	// rollback
 	service.rollback_contract_state(commit1);
 
+	auto cur_root_hash = service.current_root_state_hash();
+
 	auto current_commit_id_after_rollback1 = service.current_commit_id();
 
 	// get balance and storage after rollback

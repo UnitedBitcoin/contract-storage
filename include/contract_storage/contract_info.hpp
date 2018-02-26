@@ -4,6 +4,7 @@
 #include <memory>
 #include <cinttypes>
 #include <jsondiff/jsondiff.h>
+#include <fc/crypto/sha256.hpp>
 
 namespace contract
 {
@@ -19,7 +20,7 @@ namespace contract
 			AmountType amount;
 
 			jsondiff::JsonObject to_json() const;
-			static std::shared_ptr<ContractBalance> from_json(jsondiff::JsonValue json_value);
+			static std::shared_ptr<ContractBalance> from_json(const jsondiff::JsonValue& json_value);
 		};
 
 		struct ContractInfo
@@ -32,10 +33,11 @@ namespace contract
 			std::vector<ContractBalance> balances;
 
 			jsondiff::JsonObject to_json() const;
-			static std::shared_ptr<ContractInfo> from_json(jsondiff::JsonValue json_value);
+			static std::shared_ptr<ContractInfo> from_json(const jsondiff::JsonValue& json_value);
 		};
 		typedef std::shared_ptr<ContractInfo> ContractInfoP;
 
+		fc::sha256 ordered_json_digest(const jsondiff::JsonValue& json_value);
 		
 	}
 }

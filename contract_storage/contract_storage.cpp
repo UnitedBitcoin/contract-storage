@@ -160,12 +160,12 @@ namespace contract
 
 		fc::sha256 ContractStorageService::hash_new_contract_info_commit(ContractInfoP contract_info) const
 		{
-			return fc::sha256::hash(json_dumps(contract_info->to_json()));
+			return ordered_json_digest(contract_info->to_json());
 		}
 
 		fc::sha256 ContractStorageService::hash_contract_changes(ContractChangesP changes) const
 		{
-			return fc::sha256::hash(json_dumps(changes->to_json()));
+			return ordered_json_digest(changes->to_json());
 		}
 
 		void ContractStorageService::check_db() const
@@ -237,20 +237,6 @@ namespace contract
 			return state_hash;
 		}
 
-		template <typename T>
-		struct scope_exit
-		{
-			scope_exit(T &&t) : t_{ std::move(t) } {}
-			~scope_exit() { t_(); }
-			T t_;
-		};
-
-		template <typename T>
-		scope_exit<T> make_scope_exit(T &&t) {
-			return scope_exit<T>{
-				std::move(t)};
-		}
-
 		// TODO: only use leveldb and use leveldb transaction
 
 		ContractCommitId ContractStorageService::save_contract_info(ContractInfoP contract_info)
@@ -258,7 +244,7 @@ namespace contract
 			check_db();
 			bool success = false;
 			begin_sql_transaction();
-			auto cleanup = make_scope_exit([this, &success] {
+			BOOST_SCOPE_EXIT_ALL(this, &success) {
 				if (success)
 				{
 					commit_sql_transaction();
@@ -267,7 +253,7 @@ namespace contract
 				{
 					rollback_sql_transaction();
 				}
-			});
+			};
 			auto key = make_contract_info_key(contract_info->id);
 			leveldb::ReadOptions read_options;
 			std::string old_value;
@@ -361,7 +347,7 @@ namespace contract
 				BOOST_THROW_EXCEPTION(ContractStorageException("same commitId existed before"));
 			bool success = false;
 			begin_sql_transaction();
-			auto cleanup = make_scope_exit([this, &success] {
+			BOOST_SCOPE_EXIT_ALL(this, &success) {
 				if (success)
 				{
 					commit_sql_transaction();
@@ -370,7 +356,7 @@ namespace contract
 				{
 					rollback_sql_transaction();
 				}
-			});
+			};
 			// merge change to leveldb
 			leveldb::ReadOptions read_options;
 			leveldb::WriteOptions write_options;
@@ -475,7 +461,7 @@ namespace contract
 			// find all commits after this commit
 			bool success = false;
 			begin_sql_transaction();
-			auto cleanup = make_scope_exit([this, &success] {
+			BOOST_SCOPE_EXIT_ALL(this, &success) {
 				if (success)
 				{
 					commit_sql_transaction();
@@ -484,7 +470,7 @@ namespace contract
 				{
 					rollback_sql_transaction();
 				}
-			});
+			};
 			char *errMsg;
 			leveldb::WriteOptions write_options;
 			leveldb::ReadOptions read_options;

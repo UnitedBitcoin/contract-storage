@@ -1,5 +1,11 @@
 #include <contract_storage/contract_info.hpp>
+#include <fc/array.hpp>
+#include <fc/crypto/ripemd160.hpp>
+#include <fc/crypto/elliptic.hpp>
+#include <fc/crypto/base58.hpp>
 #include <fc/crypto/base64.hpp>
+#include <fc/crypto/sha256.hpp>
+#include <boost/uuid/sha1.hpp>
 #include <memory>
 
 namespace contract
@@ -15,7 +21,7 @@ namespace contract
 			balance_json["amount"] = amount;
 			return balance_json;
 		}
-		std::shared_ptr<ContractBalance> ContractBalance::from_json(jsondiff::JsonValue json_value)
+		std::shared_ptr<ContractBalance> ContractBalance::from_json(const jsondiff::JsonValue& json_value)
 		{
 			if (!json_value.is_object())
 				return nullptr;
@@ -43,7 +49,7 @@ namespace contract
 			json_obj["bytecode"] = bytecode_base64;
 			return json_obj;
 		}
-		std::shared_ptr<ContractInfo> ContractInfo::from_json(jsondiff::JsonValue json_value)
+		std::shared_ptr<ContractInfo> ContractInfo::from_json(const jsondiff::JsonValue& json_value)
 		{
 			if (json_value.is_null())
 				return nullptr;
@@ -73,6 +79,63 @@ namespace contract
 				contract_info->balances.push_back(*(ContractBalance::from_json(balance_json)));
 			}
 			return contract_info;
+		}
+
+		static bool compare_key(const std::string& first, const std::string& second)
+		{
+			unsigned int i = 0;
+			while ((i<first.length()) && (i<second.length()))
+			{
+				if (first[i] < second[i]) 
+					return true;
+				else if (first[i] > second[i]) 
+					return false;
+				else 
+					++i;
+			}
+			return (first.length() < second.length());
+		}
+
+
+		// 如果参数是json object，转换成json array，并且json object/json array的元素中也递归处理
+		static jsondiff::JsonValue nested_json_object_to_array(const jsondiff::JsonValue& json_value)
+		{
+			if (json_value.is_object())
+			{
+				const auto& obj = json_value.as<jsondiff::JsonObject>();
+				jsondiff::JsonArray json_array;
+				std::list<std::string> keys;
+				for (auto it = obj.begin(); it != obj.end(); it++)
+				{
+					keys.push_back(it->key());
+				}
+				keys.sort(&compare_key);
+				for (const auto& key : keys)
+				{
+					jsondiff::JsonArray item_json;
+					item_json.push_back(key);
+					item_json.push_back(nested_json_object_to_array(obj[key]));
+					json_array.push_back(item_json);
+				}
+				return json_array;
+			}
+			if (json_value.is_array())
+			{
+				const auto& arr = json_value.as<jsondiff::JsonArray>();
+				jsondiff::JsonArray result;
+				for (const auto& item : arr)
+				{
+					result.push_back(nested_json_object_to_array(item));
+				}
+				return result;
+			}
+			return json_value;
+		}
+
+		fc::sha256 ordered_json_digest(const jsondiff::JsonValue& json_value)
+		{
+			const auto& parsed_json = nested_json_object_to_array(json_value);
+			return fc::sha256::hash(json_dumps(parsed_json));
 		}
 	}
 }
