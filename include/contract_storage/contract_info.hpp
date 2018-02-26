@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <memory>
 #include <cinttypes>
 #include <jsondiff/jsondiff.h>
@@ -30,6 +31,7 @@ namespace contract
 			std::string name;
 			std::vector<std::string> apis;
 			std::vector<std::string> offline_apis;
+			std::unordered_map<std::string, uint32_t> storage_types; // contract storage's types
 			std::vector<ContractBalance> balances;
 
 			jsondiff::JsonObject to_json() const;
