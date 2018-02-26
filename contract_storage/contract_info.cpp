@@ -7,6 +7,7 @@
 #include <fc/crypto/sha256.hpp>
 #include <boost/uuid/sha1.hpp>
 #include <memory>
+#include <list>
 
 namespace contract
 {
