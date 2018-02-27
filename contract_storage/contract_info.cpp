@@ -67,36 +67,49 @@ namespace contract
 			auto json_obj = json_value.as<JsonObject>();
 			if (json_obj.size() < 1)
 				return nullptr;
-			auto contract_info = std::make_shared<ContractInfo>();
-			contract_info->id = json_obj["id"].as_string();
-			contract_info->name = json_obj["name"].as_string();
-			auto bytecode_base64 = json_obj["bytecode"].as_string();
-			auto bytecode_str = fc::base64_decode(bytecode_base64);
-			contract_info->bytecode.resize(bytecode_str.size());
-			memcpy(contract_info->bytecode.data(), bytecode_str.c_str(), bytecode_str.size());
-			auto apis_json_array = json_obj["apis"].as<JsonArray>();
-			auto offline_apis_json_array = json_obj["offline_apis"].as<JsonArray>();
-			for (size_t i = 0; i < apis_json_array.size(); i++)
+			try
 			{
-				contract_info->apis.push_back(apis_json_array[i].as_string());
+				auto contract_info = std::make_shared<ContractInfo>();
+				contract_info->id = json_obj["id"].as_string();
+				contract_info->name = json_obj["name"].as_string();
+				auto bytecode_base64 = json_obj["bytecode"].as_string();
+				auto bytecode_str = fc::base64_decode(bytecode_base64);
+				contract_info->bytecode.resize(bytecode_str.size());
+				memcpy(contract_info->bytecode.data(), bytecode_str.c_str(), bytecode_str.size());
+				auto apis_json_array = json_obj["apis"].as<JsonArray>();
+				auto offline_apis_json_array = json_obj["offline_apis"].as<JsonArray>();
+				for (size_t i = 0; i < apis_json_array.size(); i++)
+				{
+					contract_info->apis.push_back(apis_json_array[i].as_string());
+				}
+				for (size_t i = 0; i < offline_apis_json_array.size(); i++)
+				{
+					contract_info->offline_apis.push_back(offline_apis_json_array[i].as_string());
+				}
+				if (json_obj["storage_types"].is_array())
+				{
+					auto storage_types_json_array = json_obj["storage_types"].as<JsonArray>();
+					for (size_t i = 0; i < storage_types_json_array.size(); i++)
+					{
+						auto item_json = storage_types_json_array[i].as<JsonArray>();
+						FC_ASSERT(item_json.size() >= 2, "contract info format error");
+						contract_info->storage_types[item_json[0].as_string()] = item_json[1].as_uint64();
+					}
+				}
+				if (json_obj["balances"].is_array())
+				{
+					auto balances_json_array = json_obj["balances"].as<JsonArray>();
+					for (const auto &balance_json : balances_json_array)
+					{
+						contract_info->balances.push_back(*(ContractBalance::from_json(balance_json)));
+					}
+				}
+				return contract_info;
 			}
-			for (size_t i = 0; i < offline_apis_json_array.size(); i++)
+			catch (const std::exception& e)
 			{
-				contract_info->offline_apis.push_back(offline_apis_json_array[i].as_string());
+				return nullptr;
 			}
-			auto storage_types_json_array = json_obj["storage_types"].as<JsonArray>();
-			for (size_t i = 0; i < storage_types_json_array.size(); i++)
-			{
-				auto item_json = storage_types_json_array[i].as<JsonArray>();
-				FC_ASSERT(item_json.size() >= 2, "contract info format error");
-				contract_info->storage_types[item_json[0].as_string()] = item_json[1].as_uint64();
-			}
-			auto balances_json_array = json_obj["balances"].as<JsonArray>();
-			for (const auto &balance_json : balances_json_array)
-			{
-				contract_info->balances.push_back(*(ContractBalance::from_json(balance_json)));
-			}
-			return contract_info;
 		}
 
 		static bool compare_key(const std::string& first, const std::string& second)
