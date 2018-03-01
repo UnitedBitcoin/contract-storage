@@ -36,6 +36,7 @@ namespace contract
 		jsondiff::JsonObject ContractInfo::to_json() const
 		{
 			JsonObject json_obj;
+			json_obj["version"] = version;
 			json_obj["id"] = id;
 			json_obj["name"] = name;
 			json_obj["apis"] = apis;
@@ -70,6 +71,8 @@ namespace contract
 			try
 			{
 				auto contract_info = std::make_shared<ContractInfo>();
+				if (json_obj["version"].is_integer())
+					contract_info->version = json_obj["version"].as_uint64();
 				contract_info->id = json_obj["id"].as_string();
 				contract_info->name = json_obj["name"].as_string();
 				auto bytecode_base64 = json_obj["bytecode"].as_string();

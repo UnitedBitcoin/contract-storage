@@ -29,6 +29,7 @@ namespace contract
 			std::vector<unsigned char> bytecode;
 			AddressType id;
 			std::string name;
+			uint32_t version = 0;
 			std::vector<std::string> apis;
 			std::vector<std::string> offline_apis;
 			std::unordered_map<std::string, uint32_t> storage_types; // contract storage's types

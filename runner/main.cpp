@@ -17,6 +17,7 @@ int main(int argc, char **argv)
 	auto contract_info = std::make_shared<ContractInfo>();
 	contract_info->id = "c1";
 	contract_info->name = "c1_name";
+	contract_info->version = 1;
 	contract_info->bytecode.resize(1);
 	contract_info->bytecode[0] = 123;
 	contract_info->apis.push_back("init");
