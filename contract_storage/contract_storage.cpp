@@ -73,7 +73,7 @@ namespace contract
 		void ContractStorageService::init_commits_table()
 		{
 			char *errMsg;
-			// TODO: auto generate bigint id auto increment, maybe need use a new config table
+			// TODO: auto generate bigint id auto increment, maybe need use a new config table. or use GUID as id
 			auto status = sqlite3_exec(_sql_db, "CREATE TABLE IF NOT EXISTS commit_info (id INTEGER PRIMARY KEY, commit_id varchar(255) not null, change_type varchar(50) not null, contract_id varchar(255))",
 				&empty_sql_callback, nullptr, &errMsg);
 			if (status != SQLITE_OK)
@@ -382,6 +382,9 @@ namespace contract
 					if (balance.asset_id == balance_change.asset_id)
 					{
 						found_balance = true;
+						if (!balance_change.add && (balance.amount < balance_change.amount)) {
+							BOOST_THROW_EXCEPTION(ContractStorageException("contract balance can't be negative"));
+						}
 						balance.amount = balance_change.add ? (balance.amount + balance_change.amount) : (balance.amount - balance_change.amount);
 						break;
 					}
