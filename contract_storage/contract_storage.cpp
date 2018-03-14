@@ -445,7 +445,7 @@ namespace contract
 				if (!json_value.is_object())
 					BOOST_THROW_EXCEPTION(ContractStorageException("contract info db data error"));
 				auto contract_info = std::make_shared<ContractInfo>();
-				auto& json_obj = json_value.as<jsondiff::JsonObject>();
+				auto json_obj = json_value.as<jsondiff::JsonObject>();
 				jsondiff::JsonArray balances_json_array;
 				for (const auto &balance : balances)
 				{
