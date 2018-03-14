@@ -20,7 +20,7 @@ namespace contract
 			json_obj["memo"] = memo;
 			return json_obj;
 		}
-		ContractBalanceChange ContractBalanceChange::from_json(jsondiff::JsonObject json_obj)
+		ContractBalanceChange ContractBalanceChange::from_json(const jsondiff::JsonObject& json_obj)
 		{
 			ContractBalanceChange change;
 			change.asset_id = (uint32_t) json_obj["asset_id"].as_uint64();
@@ -47,7 +47,7 @@ namespace contract
 			json_obj["items"] = items_array;
 			return json_obj;
 		}
-		ContractStorageChange ContractStorageChange::from_json(jsondiff::JsonObject json_obj)
+		ContractStorageChange ContractStorageChange::from_json(const jsondiff::JsonObject& json_obj)
 		{
 			ContractStorageChange change;
 			change.contract_id = json_obj["contract_id"].as_string();
@@ -63,11 +63,31 @@ namespace contract
 			return change;
 		}
 
+		jsondiff::JsonObject ContractEventInfo::to_json() const
+		{
+			jsondiff::JsonObject json_obj;
+			json_obj["tx_id"] = transaction_id;
+			json_obj["contract_id"] = contract_id;
+			json_obj["name"] = event_name;
+			json_obj["arg"] = event_arg;
+			return json_obj;
+		}
+		ContractEventInfo ContractEventInfo::from_json(const jsondiff::JsonObject& json_obj)
+		{
+			ContractEventInfo event_info;
+			event_info.transaction_id = json_obj["tx_id"].as_string();
+			event_info.contract_id = json_obj["contract_id"].as_string();
+			event_info.event_name = json_obj["name"].as_string();
+			event_info.event_arg = json_obj["arg"].as_string();
+			return event_info;
+		}
+
 		jsondiff::JsonObject ContractChanges::to_json() const
 		{
 			jsondiff::JsonObject json_obj;
 			jsondiff::JsonArray balance_changes_array;
 			jsondiff::JsonArray storage_changes_array;
+			jsondiff::JsonArray events_array;
 			for (const auto &item : balance_changes)
 			{
 				balance_changes_array.push_back(item.to_json());
@@ -78,6 +98,11 @@ namespace contract
 				storage_changes_array.push_back(item.to_json());
 			}
 			json_obj["storage_changes"] = storage_changes_array;
+			for (const auto& event_info : events)
+			{
+				events_array.push_back(event_info.to_json());
+			}
+			json_obj["events"] = events_array;
 			return json_obj;
 		}
 		ContractChanges ContractChanges::from_json(jsondiff::JsonObject json_obj)
@@ -92,6 +117,14 @@ namespace contract
 			for (const auto &item : storage_changes_array)
 			{
 				changes.storage_changes.push_back(ContractStorageChange::from_json(item.as<jsondiff::JsonObject>()));
+			}
+			if (json_obj.find("events") != json_obj.end())
+			{
+				const auto& events_array = json_obj["events"].as<jsondiff::JsonArray>();
+				for (const auto& item : events_array)
+				{
+					changes.events.push_back(ContractEventInfo::from_json(item.as<jsondiff::JsonObject>()));
+				}
 			}
 			return changes;
 		}

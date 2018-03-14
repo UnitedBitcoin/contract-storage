@@ -13,14 +13,19 @@ namespace contract
 
 		static const std::string root_state_hash_key = "ROOT_STATE_HASH";
 
-		static std::string make_contract_info_key(const std::string &contract_id)
+		static std::string make_contract_info_key(const std::string& contract_id)
 		{
 			return std::string("contract_info_key_") + contract_id;
 		}
 		
-		static std::string make_contract_storage_key(const std::string &contract_id, const std::string &storage_name)
+		static std::string make_contract_storage_key(const std::string& contract_id, const std::string &storage_name)
 		{
 			return std::string("contract_storage_key_") + contract_id + "_" + storage_name;
+		}
+
+		static std::string make_contract_events_key(const std::string& contract_id)
+		{
+			return std::string("contract_events_key_") + contract_id;
 		}
 
 		ContractStorageService::ContractStorageService(uint32_t magic_number, const std::string& storage_db_path, const std::string& storage_sql_db_path)
@@ -254,8 +259,15 @@ namespace contract
 		{
 			check_db();
 			bool success = false;
+			leveldb::WriteOptions write_options;
+			// snapshot leveldb for rollback
+			const auto snapshot = _db->GetSnapshot();
+			BOOST_SCOPE_EXIT_ALL(&) {
+				_db->ReleaseSnapshot(snapshot);
+			};
+			std::vector<std::string> changed_leveldb_keys;
 			begin_sql_transaction();
-			BOOST_SCOPE_EXIT_ALL(this, &success) {
+			BOOST_SCOPE_EXIT_ALL(&) {
 				if (success)
 				{
 					commit_sql_transaction();
@@ -263,6 +275,16 @@ namespace contract
 				else
 				{
 					rollback_sql_transaction();
+					// leveldb rollback using snapshot
+					leveldb::ReadOptions read_options_for_snapshot;
+					read_options_for_snapshot.snapshot = snapshot;
+					for (const auto& key : changed_leveldb_keys) {
+						std::string old_value;
+						if (_db->Get(read_options_for_snapshot, key, &old_value).ok())
+						{
+							_db->Put(write_options, key, old_value);
+						}
+					}
 				}
 			};
 			auto key = make_contract_info_key(contract_info->id);
@@ -276,11 +298,11 @@ namespace contract
 			}
 
 			const auto& old_root_state_hash = current_root_state_hash();
-			leveldb::WriteOptions write_options;
 			auto json_obj = contract_info->to_json();
 			auto status = _db->Put(write_options, key, jsondiff::json_dumps(json_obj));
 			if (!status.ok())
 				BOOST_THROW_EXCEPTION(ContractStorageException("save contract info to db error"));
+			changed_leveldb_keys.push_back(key);
 			jsondiff::JsonDiff differ;
 			auto contract_info_diff = differ.diff(old_json_value, json_obj);
 			std::string contract_info_diff_str = contract_info_diff->str();
@@ -290,6 +312,7 @@ namespace contract
 			add_commit_info(commitId, CONTRACT_INFO_CHANGE_TYPE, contract_info_diff_str, contract_info->id);
 			if(!_db->Put(write_options, root_state_hash_key, root_state_hash).ok())
 				BOOST_THROW_EXCEPTION(ContractStorageException("update root state hash error"));
+			changed_leveldb_keys.push_back(root_state_hash_key);
 			success = true;
 			return commitId;
 		}
@@ -350,6 +373,14 @@ namespace contract
 		ContractCommitId ContractStorageService::commit_contract_changes(ContractChangesP changes)
 		{
 			check_db();
+			leveldb::ReadOptions read_options;
+			leveldb::WriteOptions write_options;
+			// snapshot leveldb for rollback
+			const auto snapshot = _db->GetSnapshot();
+			BOOST_SCOPE_EXIT_ALL(&) {
+				_db->ReleaseSnapshot(snapshot);
+			};
+			std::vector<std::string> changed_leveldb_keys;
 			const auto& old_root_state_hash = current_root_state_hash();
 			const auto& root_state_hash = generate_next_root_hash(old_root_state_hash, hash_contract_changes(changes));
 			ContractCommitId commitId = root_state_hash;
@@ -358,7 +389,7 @@ namespace contract
 				BOOST_THROW_EXCEPTION(ContractStorageException("same commitId existed before"));
 			bool success = false;
 			begin_sql_transaction();
-			BOOST_SCOPE_EXIT_ALL(this, &success) {
+			BOOST_SCOPE_EXIT_ALL(&) {
 				if (success)
 				{
 					commit_sql_transaction();
@@ -366,11 +397,19 @@ namespace contract
 				else
 				{
 					rollback_sql_transaction();
+					// leveldb rollback using snapshot
+					leveldb::ReadOptions read_options_for_snapshot;
+					read_options_for_snapshot.snapshot = snapshot;
+					for (const auto& key : changed_leveldb_keys) {
+						std::string old_value;
+						if (_db->Get(read_options_for_snapshot, key, &old_value).ok())
+						{
+							_db->Put(write_options, key, old_value);
+						}
+					}
 				}
 			};
 			// merge change to leveldb
-			leveldb::ReadOptions read_options;
-			leveldb::WriteOptions write_options;
 			for (const auto &balance_change : changes->balance_changes)
 			{
 				if (!balance_change.is_contract)
@@ -406,17 +445,18 @@ namespace contract
 				if (!json_value.is_object())
 					BOOST_THROW_EXCEPTION(ContractStorageException("contract info db data error"));
 				auto contract_info = std::make_shared<ContractInfo>();
-				auto json_obj = json_value.as<jsondiff::JsonObject>();
+				auto& json_obj = json_value.as<jsondiff::JsonObject>();
 				jsondiff::JsonArray balances_json_array;
 				for (const auto &balance : balances)
 				{
 					balances_json_array.push_back(balance.to_json());
 				}
 				json_obj["balances"] = balances_json_array;
-				auto new_contract_info_value = jsondiff::json_dumps(json_obj);
+				const auto& new_contract_info_value = jsondiff::json_dumps(json_obj);
 				auto write_status = _db->Put(write_options, contract_info_key, new_contract_info_value);
 				if(!write_status.ok())
 					BOOST_THROW_EXCEPTION(ContractStorageException("contract info write to db error"));
+				changed_leveldb_keys.push_back(contract_info_key);
 			}
 			jsondiff::JsonDiff differ;
 			for (const auto &storage_change : changes->storage_changes)
@@ -424,20 +464,23 @@ namespace contract
 				const auto &contract_id = storage_change.contract_id;
 				for (const auto &storage_change_item : storage_change.items)
 				{
-					auto storage_old_value = get_contract_storage(contract_id, storage_change_item.name);
-					auto storage_value = differ.patch(storage_old_value, storage_change_item.diff);
-					auto key = make_contract_storage_key(contract_id, storage_change_item.name);
+					const auto& storage_old_value = get_contract_storage(contract_id, storage_change_item.name);
+					const auto& storage_value = differ.patch(storage_old_value, storage_change_item.diff);
+					const auto& key = make_contract_storage_key(contract_id, storage_change_item.name);
 					auto status = _db->Put(write_options, key, jsondiff::json_dumps(storage_value));
 					if (!status.ok())
 						BOOST_THROW_EXCEPTION(ContractStorageException("contract storage write to db error"));
+					changed_leveldb_keys.push_back(key);
 				}
 			}
+			// TODO: events save
 
 			// save commit info
 			auto diff_str = changes->to_json();
 			add_commit_info(commitId, CONTRACT_STORAGE_CHANGE_TYPE, jsondiff::json_dumps(diff_str), "");
 			if (!_db->Put(write_options, root_state_hash_key, root_state_hash).ok())
 				BOOST_THROW_EXCEPTION(ContractStorageException("update root state hash error"));
+			changed_leveldb_keys.push_back(root_state_hash_key);
 			success = true;
 			return commitId;
 		}

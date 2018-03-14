@@ -20,7 +20,7 @@ namespace contract
 			ContractBalanceChange();
 
 			jsondiff::JsonObject to_json() const;
-			static ContractBalanceChange from_json(jsondiff::JsonObject json_obj);
+			static ContractBalanceChange from_json(const jsondiff::JsonObject& json_obj);
 		};
 		struct ContractStorageItemChange
 		{
@@ -33,13 +33,24 @@ namespace contract
 			std::vector<ContractStorageItemChange> items;
 
 			jsondiff::JsonObject to_json() const;
-			static ContractStorageChange from_json(jsondiff::JsonObject json_obj);
+			static ContractStorageChange from_json(const jsondiff::JsonObject& json_obj);
+		};
+		struct ContractEventInfo
+		{
+			std::string transaction_id;
+			AddressType contract_id;
+			std::string event_name;
+			std::string event_arg;
+
+			jsondiff::JsonObject to_json() const;
+			static ContractEventInfo from_json(const jsondiff::JsonObject& json_obj);
 		};
 		struct ContractChanges
 		{
 			// balances changes and storage changes
 			std::vector<ContractBalanceChange> balance_changes;
 			std::vector<ContractStorageChange> storage_changes;
+			std::vector<ContractEventInfo> events;
 			// TODO: chainsql changes
 
 			jsondiff::JsonObject to_json() const;
