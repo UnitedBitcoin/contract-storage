@@ -16,7 +16,7 @@ int main(int argc, char **argv)
 	service.clear_sql_db(); // for test usage
 	auto contract_info = std::make_shared<ContractInfo>();
 	contract_info->id = "c1";
-	contract_info->name = "c1_name";
+	contract_info->name = "";
 	contract_info->version = 1;
 	contract_info->bytecode.resize(1);
 	contract_info->bytecode[0] = 123;
@@ -26,6 +26,11 @@ int main(int argc, char **argv)
 	contract_info->offline_apis.push_back("name");
 	auto commit1 = service.save_contract_info(contract_info);
 	auto contract_info_found = service.get_contract_info(contract_info->id);
+
+	contract_info->name = "hello1";
+	auto commit1_after_change_name = service.save_contract_info(contract_info);
+	auto contract_info_found_after_change_name = service.get_contract_info(contract_info->id);
+	assert(contract_info_found_after_change_name->name == contract_info->name);
 	
 	// commit changes
 	JsonDiff differ;
@@ -59,6 +64,7 @@ int main(int argc, char **argv)
 
 	auto cur_root_hash = service.current_root_state_hash();
 	assert(cur_root_hash == commit1);
+	assert(service.get_contract_info(contract_info->id)->name == "");
 
 	auto current_commit_id_after_rollback1 = service.current_commit_id();
 

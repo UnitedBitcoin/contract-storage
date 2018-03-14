@@ -38,6 +38,7 @@ namespace contract
 
 			ContractInfoP get_contract_info(const AddressType& contract_id) const;
 			ContractCommitId save_contract_info(ContractInfoP contract_info);
+			AddressType find_contract_id_by_name(const std::string& name) const;
 
 			jsondiff::JsonValue get_contract_storage(AddressType contract_id, const std::string& storage_name) const;
 			std::vector<ContractBalance> get_contract_balances(const AddressType& contract_id) const;
@@ -63,6 +64,7 @@ namespace contract
 			void begin_sql_transaction();
 			void commit_sql_transaction();
 			void rollback_sql_transaction();
+			void rollback_leveldb_transaction(const leveldb::Snapshot* snapshot_to_rollback, const std::vector<std::string>& changed_keys);
 			// init commits sql table
 			void init_commits_table();
 			ContractCommitInfoP get_commit_info(const ContractCommitId& commit_id);
