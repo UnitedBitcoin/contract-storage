@@ -29,6 +29,7 @@ namespace contract
 			std::vector<unsigned char> bytecode;
 			AddressType id;
 			std::string name;
+			std::string description;
 			uint32_t version = 0;
 			std::vector<std::string> apis;
 			std::vector<std::string> offline_apis;

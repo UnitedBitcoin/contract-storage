@@ -39,6 +39,7 @@ namespace contract
 			json_obj["version"] = version;
 			json_obj["id"] = id;
 			json_obj["name"] = name;
+			json_obj["description"] = description;
 			json_obj["apis"] = apis;
 			json_obj["offline_apis"] = offline_apis;
 			JsonArray storages_array;
@@ -54,6 +55,8 @@ namespace contract
 			JsonArray balances_array;
 			for (const auto &balance : balances)
 			{
+				if (balance.amount == 0)
+					continue;
 				balances_array.push_back(balance.to_json());
 			}
 			json_obj["balances"] = balances_array;
@@ -75,6 +78,8 @@ namespace contract
 					contract_info->version = json_obj["version"].as_uint64();
 				contract_info->id = json_obj["id"].as_string();
 				contract_info->name = json_obj["name"].as_string();
+				if (json_obj.find("description") != json_obj.end())
+					contract_info->description = json_obj["description"].as_string();
 				auto bytecode_base64 = json_obj["bytecode"].as_string();
 				auto bytecode_str = fc::base64_decode(bytecode_base64);
 				contract_info->bytecode.resize(bytecode_str.size());
@@ -104,7 +109,10 @@ namespace contract
 					auto balances_json_array = json_obj["balances"].as<JsonArray>();
 					for (const auto &balance_json : balances_json_array)
 					{
-						contract_info->balances.push_back(*(ContractBalance::from_json(balance_json)));
+						auto balance = ContractBalance::from_json(balance_json);
+						if (balance->amount == 0)
+							continue;
+						contract_info->balances.push_back(*balance);
 					}
 				}
 				return contract_info;

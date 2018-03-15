@@ -45,12 +45,23 @@ namespace contract
 			jsondiff::JsonObject to_json() const;
 			static ContractEventInfo from_json(const jsondiff::JsonObject& json_obj);
 		};
+		struct ContractUpgradeInfo
+		{
+			AddressType contract_id;
+			jsondiff::DiffResultP name_diff;
+			jsondiff::DiffResultP description_diff;
+
+			// TODO
+			jsondiff::JsonObject to_json() const;
+			static ContractUpgradeInfo from_json(const jsondiff::JsonObject& json_obj);
+		};
 		struct ContractChanges
 		{
 			// balances changes and storage changes
 			std::vector<ContractBalanceChange> balance_changes;
 			std::vector<ContractStorageChange> storage_changes;
 			std::vector<ContractEventInfo> events;
+			std::vector<ContractUpgradeInfo> upgrade_infos; // TODO
 			// TODO: chainsql changes
 
 			jsondiff::JsonObject to_json() const;

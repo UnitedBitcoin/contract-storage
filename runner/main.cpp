@@ -12,6 +12,8 @@ static DiffResultP make_json_diff_of_string(JsonDiff &differ, const std::string 
 
 int main(int argc, char **argv)
 {
+	// you need delete old test data to run this testcase
+	JsonDiff differ;
 	ContractStorageService service(123, "test_leveldb.db", "test_sql_db.db");
 	service.clear_sql_db(); // for test usage
 	auto contract_info = std::make_shared<ContractInfo>();
@@ -31,9 +33,17 @@ int main(int argc, char **argv)
 	auto commit1_after_change_name = service.save_contract_info(contract_info);
 	auto contract_info_found_after_change_name = service.get_contract_info(contract_info->id);
 	assert(contract_info_found_after_change_name->name == contract_info->name);
+
+	auto changes_of_change_contract_desc = std::make_shared<ContractChanges>();
+	changes_of_change_contract_desc->upgrade_infos.resize(1);
+	changes_of_change_contract_desc->upgrade_infos[0].contract_id = contract_info->id;
+	std::string contract_desc("demo description 123");
+	changes_of_change_contract_desc->upgrade_infos[0].description_diff = make_json_diff_of_string(differ, contract_info->description, contract_desc);
+	auto commit1_after_change_contract_desc = service.commit_contract_changes(changes_of_change_contract_desc);
+	auto contract_info_found_after_change_desc = service.get_contract_info(contract_info->id);
+	assert(contract_desc == contract_info_found_after_change_desc->description);
 	
 	// commit changes
-	JsonDiff differ;
 	auto changes1 = std::make_shared<ContractChanges>();
 	ContractBalanceChange balance_change1;
 	balance_change1.add = true;
@@ -61,6 +71,7 @@ int main(int argc, char **argv)
 
 	// rollback
 	service.rollback_contract_state(commit1);
+	const auto& contract_info_after_rollbacked_to_commit1 = service.get_contract_info(contract_info->id);
 
 	auto cur_root_hash = service.current_root_state_hash();
 	assert(cur_root_hash == commit1);
@@ -76,6 +87,8 @@ int main(int argc, char **argv)
 	service.rollback_contract_state(EMPTY_COMMIT_ID);
 
 	// get contract info after rollback
+	auto contract_info_after_rollback_all = service.get_contract_info(contract_info->id);
+	assert(!contract_info_after_rollback_all);
 	auto balances_after_rollback2 = service.get_contract_balances(contract_info->id);
 	assert(balances_after_rollback2.empty());
 	auto name_storage_after_rollback2 = service.get_contract_storage(contract_info->id, "name").as_string();

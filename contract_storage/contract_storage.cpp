@@ -482,7 +482,6 @@ namespace contract
 				auto json_value = jsondiff::json_loads(value);
 				if (!json_value.is_object())
 					BOOST_THROW_EXCEPTION(ContractStorageException("contract info db data error"));
-				auto contract_info = std::make_shared<ContractInfo>();
 				auto json_obj = json_value.as<jsondiff::JsonObject>();
 				jsondiff::JsonArray balances_json_array;
 				for (const auto &balance : balances)
@@ -511,11 +510,42 @@ namespace contract
 					changed_leveldb_keys.push_back(key);
 				}
 			}
+
 			// TODO: events save
 
+			// upgrade infos
+			for (const auto& upgrade_info : changes->upgrade_infos)
+			{
+				const auto& contract_id = upgrade_info.contract_id;
+				std::string value;
+				auto contract_info_key = make_contract_info_key(contract_id);
+				auto status = _db->Get(read_options, contract_info_key, &value);
+				if (!status.ok()) {
+					BOOST_THROW_EXCEPTION(ContractStorageException("contract info not found to upgrade"));
+				}
+				auto json_value = jsondiff::json_loads(value);
+				if (!json_value.is_object())
+					BOOST_THROW_EXCEPTION(ContractStorageException("contract info db data error"));
+				auto contract_info = ContractInfo::from_json(json_value);
+				// check name before commit
+				/*
+				if(contract_info->name.size() > 0)
+					BOOST_THROW_EXCEPTION(ContractStorageException(std::string("contract ") + contract_id + " with name can't upgrade again"));*/
+				if(upgrade_info.name_diff)
+					contract_info->name = differ.patch(contract_info->name, upgrade_info.name_diff).as_string();
+				if(upgrade_info.description_diff)
+					contract_info->description = differ.patch(contract_info->description, upgrade_info.description_diff).as_string();
+				const auto& new_contract_info_value = jsondiff::json_dumps(contract_info->to_json());
+				auto write_status = _db->Put(write_options, contract_info_key, new_contract_info_value);
+				if (!write_status.ok())
+					BOOST_THROW_EXCEPTION(ContractStorageException("contract info write to db error"));
+				changed_leveldb_keys.push_back(contract_info_key);
+			}
+
 			// save commit info
-			auto diff_str = changes->to_json();
-			add_commit_info(commitId, CONTRACT_STORAGE_CHANGE_TYPE, jsondiff::json_dumps(diff_str), "");
+			const auto& diff_json = changes->to_json();
+			const auto& diff_str = jsondiff::json_dumps(diff_json);
+			add_commit_info(commitId, CONTRACT_STORAGE_CHANGE_TYPE, diff_str, "");
 			if (!_db->Put(write_options, root_state_hash_key, root_state_hash).ok())
 				BOOST_THROW_EXCEPTION(ContractStorageException("update root state hash error"));
 			changed_leveldb_keys.push_back(root_state_hash_key);
@@ -655,7 +685,17 @@ namespace contract
 						// balance change rollback
 						if (!balance_change.is_contract)
 							continue;
-						auto balances = get_contract_balances(balance_change.address);
+						std::string value;
+						auto contract_info_key = make_contract_info_key(balance_change.address);
+						auto status = _db->Get(read_options, contract_info_key, &value);
+						if (!status.ok()) {
+							BOOST_THROW_EXCEPTION(ContractStorageException("contract info not found to transfer balance"));
+						}
+						auto json_value = jsondiff::json_loads(value);
+						if (!json_value.is_object())
+							BOOST_THROW_EXCEPTION(ContractStorageException("contract info db data error"));
+						auto contract_info = ContractInfo::from_json(json_value);
+						auto balances = contract_info->balances;
 						auto found_balance = false;
 						for (auto &balance : balances)
 						{
@@ -673,24 +713,8 @@ namespace contract
 							balance.asset_id = balance_change.asset_id;
 							balances.push_back(balance);
 						}
-						std::string value;
-						auto contract_info_key = make_contract_info_key(balance_change.address);
-						auto status = _db->Get(read_options, contract_info_key, &value);
-						if (!status.ok()) {
-							BOOST_THROW_EXCEPTION(ContractStorageException("contract info not found to transfer balance"));
-						}
-						auto json_value = jsondiff::json_loads(value);
-						if (!json_value.is_object())
-							BOOST_THROW_EXCEPTION(ContractStorageException("contract info db data error"));
-						auto contract_info = std::make_shared<ContractInfo>();
-						auto json_obj = json_value.as<jsondiff::JsonObject>();
-						jsondiff::JsonArray balances_json_array;
-						for (const auto &balance : balances)
-						{
-							balances_json_array.push_back(balance.to_json());
-						}
-						json_obj["balances"] = balances_json_array;
-						auto new_contract_info_value = jsondiff::json_dumps(json_obj);
+						contract_info->balances = balances;
+						auto new_contract_info_value = jsondiff::json_dumps(contract_info->to_json());
 						auto write_status = _db->Put(write_options, contract_info_key, new_contract_info_value);
 						if (!write_status.ok())
 							BOOST_THROW_EXCEPTION(ContractStorageException("contract info write to db error"));
@@ -710,6 +734,36 @@ namespace contract
 								BOOST_THROW_EXCEPTION(ContractStorageException("contract storage write to db error"));
 							changed_leveldb_keys.push_back(key);
 						}
+					}
+					for (const auto& upgrade_info : changes.upgrade_infos)
+					{
+						const auto& contract_id = upgrade_info.contract_id;
+						std::string value;
+						auto contract_info_key = make_contract_info_key(contract_id);
+						auto status = _db->Get(read_options, contract_info_key, &value);
+						if (!status.ok()) {
+							BOOST_THROW_EXCEPTION(ContractStorageException("contract info not found to rollback upgrade"));
+						}
+						auto json_value = jsondiff::json_loads(value);
+						if (!json_value.is_object())
+							BOOST_THROW_EXCEPTION(ContractStorageException("contract info db data error"));
+						auto contract_info = ContractInfo::from_json(json_value);
+						jsondiff::JsonValue old_contract_name;
+						if (upgrade_info.name_diff)
+							old_contract_name = differ.rollback(contract_info->name, upgrade_info.name_diff);
+						else
+							old_contract_name = contract_info->name;
+						contract_info->name = old_contract_name.is_string() ? old_contract_name.as_string() : "";
+						jsondiff::JsonValue old_contract_desc;
+						if (upgrade_info.description_diff)
+							old_contract_desc = differ.rollback(contract_info->description, upgrade_info.description_diff);
+						else
+							old_contract_desc = contract_info->description;
+						contract_info->description = old_contract_desc.is_string() ? old_contract_desc.as_string() : "";
+						status = _db->Put(write_options, contract_info_key, jsondiff::json_dumps(contract_info->to_json()));
+						if(!status.ok())
+							BOOST_THROW_EXCEPTION(ContractStorageException("contract upgrade info rollback failed"));
+						changed_leveldb_keys.push_back(contract_info_key);
 					}
 				}
 				else
