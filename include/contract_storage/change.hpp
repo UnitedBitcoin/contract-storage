@@ -51,7 +51,6 @@ namespace contract
 			jsondiff::DiffResultP name_diff;
 			jsondiff::DiffResultP description_diff;
 
-			// TODO
 			jsondiff::JsonObject to_json() const;
 			static ContractUpgradeInfo from_json(const jsondiff::JsonObject& json_obj);
 		};

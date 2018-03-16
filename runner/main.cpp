@@ -34,6 +34,7 @@ int main(int argc, char **argv)
 	auto contract_info_found_after_change_name = service.get_contract_info(contract_info->id);
 	assert(contract_info_found_after_change_name->name == contract_info->name);
 
+	service.rollback_contract_state(commit1);
 	auto changes_of_change_contract_desc = std::make_shared<ContractChanges>();
 	changes_of_change_contract_desc->upgrade_infos.resize(1);
 	changes_of_change_contract_desc->upgrade_infos[0].contract_id = contract_info->id;

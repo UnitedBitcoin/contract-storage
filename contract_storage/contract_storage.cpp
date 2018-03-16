@@ -527,10 +527,9 @@ namespace contract
 				if (!json_value.is_object())
 					BOOST_THROW_EXCEPTION(ContractStorageException("contract info db data error"));
 				auto contract_info = ContractInfo::from_json(json_value);
-				// check name before commit
-				/*
-				if(contract_info->name.size() > 0)
-					BOOST_THROW_EXCEPTION(ContractStorageException(std::string("contract ") + contract_id + " with name can't upgrade again"));*/
+				auto old_contract_name(contract_info->name);
+				if(!old_contract_name.empty())
+					BOOST_THROW_EXCEPTION(ContractStorageException(std::string("contract ") + contract_id + " with name can't upgrade again"));
 				if(upgrade_info.name_diff)
 					contract_info->name = differ.patch(contract_info->name, upgrade_info.name_diff).as_string();
 				if(upgrade_info.description_diff)
@@ -540,6 +539,20 @@ namespace contract
 				if (!write_status.ok())
 					BOOST_THROW_EXCEPTION(ContractStorageException("contract info write to db error"));
 				changed_leveldb_keys.push_back(contract_info_key);
+
+				if (!old_contract_name.empty()) {
+					const auto& contract_name_id_mapping_key = make_contract_name_id_mapping_key(old_contract_name);
+					auto delete_status = _db->Delete(write_options, contract_name_id_mapping_key);
+					if (!delete_status.ok() && !delete_status.IsNotFound())
+						BOOST_THROW_EXCEPTION(ContractStorageException("contract info write to db error"));
+					changed_leveldb_keys.push_back(contract_name_id_mapping_key);
+				}
+				if (!contract_info->name.empty()) {
+					const auto& contract_name_id_mapping_key = make_contract_name_id_mapping_key(contract_info->name);
+					if (!_db->Put(write_options, contract_name_id_mapping_key, contract_info->id).ok())
+						BOOST_THROW_EXCEPTION(ContractStorageException("contract info write to db error"));
+					changed_leveldb_keys.push_back(contract_name_id_mapping_key);
+				}
 			}
 
 			// save commit info
@@ -748,6 +761,7 @@ namespace contract
 						if (!json_value.is_object())
 							BOOST_THROW_EXCEPTION(ContractStorageException("contract info db data error"));
 						auto contract_info = ContractInfo::from_json(json_value);
+						auto now_contract_name(contract_info->name);
 						jsondiff::JsonValue old_contract_name;
 						if (upgrade_info.name_diff)
 							old_contract_name = differ.rollback(contract_info->name, upgrade_info.name_diff);
@@ -764,6 +778,20 @@ namespace contract
 						if(!status.ok())
 							BOOST_THROW_EXCEPTION(ContractStorageException("contract upgrade info rollback failed"));
 						changed_leveldb_keys.push_back(contract_info_key);
+						// mapping name=>id
+						if (!now_contract_name.empty()) {
+							const auto& contract_name_id_mapping_key = make_contract_name_id_mapping_key(now_contract_name);
+							auto delete_status = _db->Delete(write_options, contract_name_id_mapping_key);
+							if (!delete_status.ok() && !delete_status.IsNotFound())
+								BOOST_THROW_EXCEPTION(ContractStorageException("contract upgrade info rollback failed"));
+							changed_leveldb_keys.push_back(contract_name_id_mapping_key);
+						}
+						if (!contract_info->name.empty()) {
+							const auto& contract_name_id_mapping_key = make_contract_name_id_mapping_key(contract_info->name);
+							if (!_db->Put(write_options, contract_name_id_mapping_key, contract_info->id).ok())
+								BOOST_THROW_EXCEPTION(ContractStorageException("contract upgrade info rollback failed"));
+							changed_leveldb_keys.push_back(contract_name_id_mapping_key);
+						}
 					}
 				}
 				else
