@@ -20,6 +20,7 @@ int main(int argc, char **argv)
 	contract_info->id = "c1";
 	contract_info->name = "";
 	contract_info->version = 1;
+	contract_info->creator_address = "addr1";
 	contract_info->bytecode.resize(1);
 	contract_info->bytecode[0] = 123;
 	contract_info->apis.push_back("init");

@@ -38,6 +38,7 @@ namespace contract
 			JsonObject json_obj;
 			json_obj["version"] = version;
 			json_obj["id"] = id;
+			json_obj["creator_address"] = creator_address;
 			json_obj["name"] = name;
 			json_obj["description"] = description;
 			json_obj["apis"] = apis;
@@ -80,6 +81,8 @@ namespace contract
 				contract_info->name = json_obj["name"].as_string();
 				if (json_obj.find("description") != json_obj.end())
 					contract_info->description = json_obj["description"].as_string();
+				if (json_obj.find("creator_address") != json_obj.end())
+					contract_info->creator_address = json_obj["creator_address"].as_string();
 				auto bytecode_base64 = json_obj["bytecode"].as_string();
 				auto bytecode_str = fc::base64_decode(bytecode_base64);
 				contract_info->bytecode.resize(bytecode_str.size());

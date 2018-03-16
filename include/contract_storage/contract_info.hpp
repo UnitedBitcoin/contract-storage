@@ -28,6 +28,8 @@ namespace contract
 		{
 			std::vector<unsigned char> bytecode;
 			AddressType id;
+			AddressType creator_address;
+			// TODO: tx id where contract created in
 			std::string name;
 			std::string description;
 			uint32_t version = 0;
