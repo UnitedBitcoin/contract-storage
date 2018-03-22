@@ -63,6 +63,7 @@ int main(int argc, char **argv)
 	storage_change1.items.push_back(item_change1);
 	changes1->storage_changes.push_back(storage_change1);
 	changes1->events.push_back(ContractEventInfo{"tx1", "contract1", "hello", "world123"});
+	auto commit_id_before_commit2 = commit1_after_change_contract_desc;
 	auto commit2 = service.commit_contract_changes(changes1);
 
 	// get balance and storage after commit
@@ -72,14 +73,24 @@ int main(int argc, char **argv)
 	assert(name_storage_after_commit_changes1 == "China");
 
 	// rollback
-	service.rollback_contract_state(commit1);
-	const auto& contract_info_after_rollbacked_to_commit1 = service.get_contract_info(contract_info->id);
+	service.rollback_contract_state(commit_id_before_commit2);
+	const auto& contract_info_after_rollbacked_to_commit_id_before_commit2 = service.get_contract_info(contract_info->id);
 
+	auto commit2_again = service.commit_contract_changes(changes1);
+	assert(commit2_again == commit2);
+	service.reset_root_state_hash(commit_id_before_commit2);
+	assert(commit_id_before_commit2 == service.current_root_state_hash());
+	assert(commit2 == service.top_root_state_hash());
+	// TODO: test get snapshot after current commit id
+	auto commit2_again_again = service.commit_contract_changes(changes1);
+	assert(commit2_again_again == commit2);
+
+	service.rollback_contract_state(commit1);
 	auto cur_root_hash = service.current_root_state_hash();
 	assert(cur_root_hash == commit1);
 	assert(service.get_contract_info(contract_info->id)->name == "");
 
-	auto current_commit_id_after_rollback1 = service.current_commit_id();
+	auto current_commit_id_after_rollback1 = service.current_root_state_hash();
 
 	// get balance and storage after rollback
 	auto balances_after_rollback1 = service.get_contract_balances(contract_info->id);

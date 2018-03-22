@@ -44,7 +44,7 @@ namespace contract
 			std::vector<ContractBalance> get_contract_balances(const AddressType& contract_id) const;
 			// you must ensure changes is right before commit now
 			ContractCommitId commit_contract_changes(ContractChangesP changes);
-			void rollback_contract_state(ContractCommitId dest_commit_id);
+			void rollback_contract_state(const ContractCommitId& dest_commit_id);
 
 			// don't call this in production usage
 			void clear_sql_db();
@@ -53,7 +53,15 @@ namespace contract
 			// new-root-hash = hash(old-root-hash, commit-diff, block_height)
 			std::string current_root_state_hash() const;
 
-			ContractCommitId current_commit_id() const;
+			// check whether haven't pending reset root state hash
+			bool is_latest() const;
+
+			// TODO: get snapshot after commit id
+
+			ContractCommitId top_root_state_hash() const;
+			void reset_root_state_hash(const ContractCommitId& dest_commit_id);
+
+			ContractCommitId top_commit_id() const;
 			uint32_t magic_number() const { return _magic_number; }
 			uint32_t current_block_height() const { return _current_block_height; }
 			void set_current_block_height(uint32_t block_height) { this->_current_block_height = block_height; }
@@ -65,6 +73,7 @@ namespace contract
 			void commit_sql_transaction();
 			void rollback_sql_transaction();
 			void rollback_leveldb_transaction(const leveldb::Snapshot* snapshot_to_rollback, const std::vector<std::string>& changed_keys);
+			void rollback_to_root_state_hash_without_transactional(const ContractCommitId& dest_commit_id, std::vector<std::string>& changed_leveldb_keys);
 			// init commits sql table
 			void init_commits_table();
 			ContractCommitInfoP get_commit_info(const ContractCommitId& commit_id);
