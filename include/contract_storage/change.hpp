@@ -60,7 +60,7 @@ namespace contract
 			std::vector<ContractBalanceChange> balance_changes;
 			std::vector<ContractStorageChange> storage_changes;
 			std::vector<ContractEventInfo> events;
-			std::vector<ContractUpgradeInfo> upgrade_infos; // TODO
+			std::vector<ContractUpgradeInfo> upgrade_infos;
 			// TODO: chainsql changes
 
 			jsondiff::JsonObject to_json() const;

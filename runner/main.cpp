@@ -63,6 +63,7 @@ int main(int argc, char **argv)
 	storage_change1.items.push_back(item_change1);
 	changes1->storage_changes.push_back(storage_change1);
 	changes1->events.push_back(ContractEventInfo{"tx1", "contract1", "hello", "world123"});
+
 	auto commit_id_before_commit2 = commit1_after_change_contract_desc;
 	auto commit2 = service.commit_contract_changes(changes1);
 
@@ -71,6 +72,10 @@ int main(int argc, char **argv)
 	assert(balances_after_commit_changes1.size() == 1 && balances_after_commit_changes1[0].amount == 100 && balances_after_commit_changes1[0].asset_id == 0);
 	auto name_storage_after_commit_changes1 = service.get_contract_storage(contract_info->id, "name").as_string();
 	assert(name_storage_after_commit_changes1 == "China");
+	auto commit_events_after_commit_changes1 = service.get_commit_events(service.current_root_state_hash());
+	auto transaction_events_after_commit_changes1 = service.get_transaction_events(changes1->events[0].transaction_id);
+	assert(commit_events_after_commit_changes1->size() == 1);
+	assert(transaction_events_after_commit_changes1->size() == 1);
 
 	// rollback
 	service.rollback_contract_state(commit_id_before_commit2);
@@ -95,6 +100,11 @@ int main(int argc, char **argv)
 	// get balance and storage after rollback
 	auto balances_after_rollback1 = service.get_contract_balances(contract_info->id);
 	auto name_storage_after_rollback1 = service.get_contract_storage(contract_info->id, "name").as_string();
+
+	auto commit_events_after_rollback = service.get_commit_events(service.current_root_state_hash());
+	auto transaction_events_after_rollback = service.get_transaction_events(changes1->events[0].transaction_id);
+	assert(commit_events_after_rollback->size() == 0);
+	assert(transaction_events_after_rollback->size() == 0);
 
 	// rollback to contract not created
 	service.rollback_contract_state(EMPTY_COMMIT_ID);

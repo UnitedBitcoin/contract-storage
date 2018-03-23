@@ -2,8 +2,11 @@
 #include <contract_storage/config.hpp>
 #include <contract_storage/exceptions.hpp>
 #include <fc/io/json.hpp>
+#include <fc/string.hpp>
 #include <fc/crypto/base64.hpp>
 #include <boost/scope_exit.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 
 namespace contract
 {
@@ -24,9 +27,33 @@ namespace contract
 			return std::string("contract_storage_key_") + contract_id + "_" + storage_name;
 		}
 
-		static std::string make_contract_events_key(const std::string& contract_id)
+		static std::string make_event_id_prefix(const ContractCommitId& commit_id) {
+			return std::string("event$") + commit_id;
+		}
+
+		static std::string make_event_id(const ContractCommitId& commit_id, size_t index_in_commit)
 		{
-			return std::string("contract_events_key_") + contract_id;
+			return make_event_id_prefix(commit_id) + std::to_string(index_in_commit);
+		}
+
+		static std::string make_commit_event_key_prefix_of_commit(const ContractCommitId& commit_id) {
+			return std::string("commit_event$") + commit_id + "$";
+		}
+
+		static std::string make_commit_event_key(const ContractCommitId& commit_id, const std::string& event_id)
+		{
+			return make_commit_event_key_prefix_of_commit(commit_id) + event_id;
+		}
+
+		static std::string make_transaction_event_key_prefix_of_transaction_id(const std::string& transaction_id) {
+			if (transaction_id.empty())
+				BOOST_THROW_EXCEPTION(ContractStorageException("empty transaction id error"));
+			return std::string("transaction_event$") + transaction_id + "$";
+		}
+
+		static std::string make_transaction_event_key(const std::string& transaction_id, const std::string& event_id)
+		{
+			return make_transaction_event_key_prefix_of_transaction_id(transaction_id) + event_id;
 		}
 
 		static std::string make_contract_name_id_mapping_key(const std::string& contract_name)
@@ -396,7 +423,12 @@ namespace contract
 		{
 			check_db();
 			auto key = make_contract_storage_key(contract_id, storage_name);
+			auto snapshot = _db->GetSnapshot();
+			BOOST_SCOPE_EXIT_ALL(&) {
+				_db->ReleaseSnapshot(snapshot);
+			};
 			leveldb::ReadOptions options;
+			options.snapshot = snapshot;
 			std::string value;
 			auto status = _db->Get(options, key, &value);
 			if (!status.ok())
@@ -406,7 +438,12 @@ namespace contract
 		std::vector<ContractBalance> ContractStorageService::get_contract_balances(const AddressType& contract_id) const
 		{
 			check_db();
+			auto snapshot = _db->GetSnapshot();
+			BOOST_SCOPE_EXIT_ALL(&) {
+				_db->ReleaseSnapshot(snapshot);
+			};
 			leveldb::ReadOptions options;
+			options.snapshot = snapshot;
 			std::string value;
 			std::vector<ContractBalance> result;
 			auto status = _db->Get(options, make_contract_info_key(contract_id), &value);
@@ -430,6 +467,73 @@ namespace contract
 			return result;
 		}
 
+		std::shared_ptr<std::vector<ContractEventInfo>> ContractStorageService::get_commit_events(const ContractCommitId& commit_id) const
+		{
+			check_db();
+			auto events = std::make_shared<std::vector<ContractEventInfo>>();
+			auto snapshot = _db->GetSnapshot();
+			BOOST_SCOPE_EXIT_ALL(&) {
+				_db->ReleaseSnapshot(snapshot);
+			};
+			leveldb::ReadOptions read_options;
+			read_options.snapshot = snapshot;
+			auto iter = _db->NewIterator(read_options);
+			BOOST_SCOPE_EXIT_ALL(&) {
+				delete iter;
+			};
+			const auto& prefix = make_event_id_prefix(commit_id);
+			iter->Seek(prefix);
+			while (iter->Valid()) {
+				std::string key = iter->key().ToString();
+				if (!boost::starts_with(key, prefix) || key == prefix) {
+					break;
+				}
+				std::string event_value = iter->value().ToString();
+				auto event_json = jsondiff::json_loads(event_value);
+				if (event_json.is_object()) {
+					const auto& event_info = ContractEventInfo::from_json(event_json.as<jsondiff::JsonObject>());
+					events->push_back(event_info);
+				}
+				iter->Next();
+			}
+			return events; 
+		}
+
+		std::shared_ptr<std::vector<ContractEventInfo>> ContractStorageService::get_transaction_events(const std::string& transaction_id) const
+		{
+			check_db();
+			auto events = std::make_shared<std::vector<ContractEventInfo>>();
+			auto snapshot = _db->GetSnapshot();
+			BOOST_SCOPE_EXIT_ALL(&) {
+				_db->ReleaseSnapshot(snapshot);
+			};
+			leveldb::ReadOptions read_options;
+			read_options.snapshot = snapshot;
+			auto iter = _db->NewIterator(read_options);
+			BOOST_SCOPE_EXIT_ALL(&) {
+				delete iter;
+			};
+			const auto& prefix = make_transaction_event_key_prefix_of_transaction_id(transaction_id);
+			iter->Seek(prefix);
+			while (iter->Valid()) {
+				std::string key = iter->key().ToString();
+				if (!boost::starts_with(key, prefix) || key == prefix) {
+					break;
+				}
+				std::string event_id = iter->value().ToString();
+				std::string event_value;
+				if (_db->Get(read_options, event_id, &event_value).ok()) {
+					auto event_json = jsondiff::json_loads(event_value);
+					if (event_json.is_object()) {
+						const auto& event_info = ContractEventInfo::from_json(event_json.as<jsondiff::JsonObject>());
+						events->push_back(event_info);
+					}
+				}
+				iter->Next();
+			}
+			return events;
+		}
+
 		void ContractStorageService::clear_sql_db()
 		{
 			check_db();
@@ -444,6 +548,7 @@ namespace contract
 		}
 
 		// not support concurrency now
+		// TODO: add lock
 		// save commit history with all diffs
 		ContractCommitId ContractStorageService::commit_contract_changes(ContractChangesP changes)
 		{
@@ -544,7 +649,31 @@ namespace contract
 				}
 			}
 
-			// TODO: events save
+			// events save
+			for (size_t i=0;i<changes->events.size();i++)
+			{
+				const auto& event_info = changes->events[i];
+				// let event_id => "event" + commit_id + index
+				// save {event_id} => event json info, event_commit_{commit_id}_{event_id} => event_id, event_transaction_{transaction_id}_{event_id} => event_id if transaction id not empty
+				const auto& event_id = make_event_id(commitId, i);
+				const auto& event_json = event_info.to_json();
+				if (!_db->Put(write_options, event_id, jsondiff::json_dumps(event_json)).ok()) {
+					BOOST_THROW_EXCEPTION(ContractStorageException("event info save error"));
+				}
+				changed_leveldb_keys.push_back(event_id);
+				const auto& commit_event_key = make_commit_event_key(commitId, event_id);
+				if (!_db->Put(write_options, commit_event_key, event_id).ok()) {
+					BOOST_THROW_EXCEPTION(ContractStorageException("event info save error"));
+				}
+				changed_leveldb_keys.push_back(commit_event_key);
+				if (!event_info.transaction_id.empty()) {
+					const auto& transaction_event_key = make_transaction_event_key(event_info.transaction_id, event_id);
+					if (!_db->Put(write_options, transaction_event_key, event_id).ok()) {
+						BOOST_THROW_EXCEPTION(ContractStorageException("event info save error"));
+					}
+					changed_leveldb_keys.push_back(transaction_event_key);
+				}
+			}
 
 			// upgrade infos
 			for (const auto& upgrade_info : changes->upgrade_infos)
@@ -676,7 +805,7 @@ namespace contract
 
 			jsondiff::JsonDiff differ;
 
-			// rollback contracts info, contract balances, and contract storages
+			// rollback contracts info, contract balances, contract storages, upgrade infos and events
 			for (auto i = newerCommitInfos.begin(); i != newerCommitInfos.end(); i++)
 			{
 				// TODO: contract events rollback
@@ -823,6 +952,22 @@ namespace contract
 							if (!_db->Put(write_options, contract_name_id_mapping_key, contract_info->id).ok())
 								BOOST_THROW_EXCEPTION(ContractStorageException("contract upgrade info rollback failed"));
 							changed_leveldb_keys.push_back(contract_name_id_mapping_key);
+						}
+					}
+					for (size_t j = 0; j < changes.events.size(); j++) {
+						const auto& event_info = changes.events[j];
+						const auto& event_id = make_event_id(i->commit_id, j);
+						const auto& commit_event_key = make_commit_event_key(i->commit_id, event_id);
+						if (!_db->Delete(write_options, commit_event_key).ok()) {
+							BOOST_THROW_EXCEPTION(ContractStorageException("rollback event info failed"));
+						}
+						changed_leveldb_keys.push_back(commit_event_key);
+						if (!event_info.transaction_id.empty()) {
+							const auto& transaction_event_key = make_transaction_event_key(event_info.transaction_id, event_id);
+							if(!_db->Delete(write_options, transaction_event_key).ok()) {
+								BOOST_THROW_EXCEPTION(ContractStorageException("rollback event info failed"));
+							}
+							changed_leveldb_keys.push_back(transaction_event_key);
 						}
 					}
 				}

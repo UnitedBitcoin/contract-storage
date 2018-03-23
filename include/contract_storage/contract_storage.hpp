@@ -42,6 +42,9 @@ namespace contract
 
 			jsondiff::JsonValue get_contract_storage(AddressType contract_id, const std::string& storage_name) const;
 			std::vector<ContractBalance> get_contract_balances(const AddressType& contract_id) const;
+			std::shared_ptr<std::vector<ContractEventInfo>> get_commit_events(const ContractCommitId& commit_id) const;
+			std::shared_ptr<std::vector<ContractEventInfo>> get_transaction_events(const std::string& transaction_id) const;
+
 			// you must ensure changes is right before commit now
 			ContractCommitId commit_contract_changes(ContractChangesP changes);
 			void rollback_contract_state(const ContractCommitId& dest_commit_id);
