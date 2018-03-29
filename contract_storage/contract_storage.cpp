@@ -122,6 +122,13 @@ namespace contract
 				sqlite3_free(errMsg);
 				BOOST_THROW_EXCEPTION(ContractStorageException(errMsg));
 			}
+			status = sqlite3_exec(_sql_db, "CREATE INDEX IF NOT EXISTS commit_id_key ON commit_info (commit_id)",
+				&empty_sql_callback, nullptr, &errMsg);
+			if (status != SQLITE_OK)
+			{
+				sqlite3_free(errMsg);
+				BOOST_THROW_EXCEPTION(ContractStorageException(errMsg));
+			}
 		}
 
 		static int query_records_sql_callback(void *json_array_ptr, int argc, char **argv, char **colNames)
