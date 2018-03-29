@@ -7,6 +7,10 @@
 #include <boost/scope_exit.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <set>
+#include <vector>
+#include <map>
+#include <mutex>
 
 namespace contract
 {
@@ -16,6 +20,8 @@ namespace contract
 
 		static const std::string root_state_hash_key = "ROOT_STATE_HASH";
 		static const std::string top_root_state_hash_key = "TOP_ROOT_STATE_HASH";
+
+		static std::recursive_mutex storage_mutex;
 
 		static std::string make_contract_info_key(const std::string& contract_id)
 		{
@@ -118,6 +124,7 @@ namespace contract
 
 		void ContractStorageService::init_commits_table()
 		{
+			std::lock_guard<std::recursive_mutex> lock(storage_mutex);
 			char *errMsg;
 			// TODO: auto generate bigint id auto increment, maybe need use a new config table. or use GUID as id
 			auto status = sqlite3_exec(_sql_db, "CREATE TABLE IF NOT EXISTS commit_info (id INTEGER PRIMARY KEY, commit_id varchar(255) not null, change_type varchar(50) not null, contract_id varchar(255))",
@@ -345,6 +352,7 @@ namespace contract
 
 		ContractCommitId ContractStorageService::save_contract_info(ContractInfoP contract_info)
 		{
+			std::lock_guard<std::recursive_mutex> lock(storage_mutex);
 			check_db();
 			bool success = false;
 			leveldb::WriteOptions write_options;
@@ -521,6 +529,7 @@ namespace contract
 
 		void ContractStorageService::clear_sql_db()
 		{
+			std::lock_guard<std::recursive_mutex> lock(storage_mutex);
 			check_db();
 			char *err_msg;
 			auto drop_status = sqlite3_exec(_sql_db, "delete from commit_info", &empty_sql_callback, nullptr, &err_msg);
@@ -532,11 +541,10 @@ namespace contract
 			}
 		}
 
-		// not support concurrency now
-		// TODO: add lock
 		// save commit history with all diffs
 		ContractCommitId ContractStorageService::commit_contract_changes(ContractChangesP changes)
 		{
+			std::lock_guard<std::recursive_mutex> lock(storage_mutex);
 			check_db();
 			leveldb::ReadOptions read_options;
 			leveldb::WriteOptions write_options;
@@ -1035,6 +1043,7 @@ namespace contract
 
 		void ContractStorageService::rollback_contract_state(const ContractCommitId& dest_commit_id)
 		{
+			std::lock_guard<std::recursive_mutex> lock(storage_mutex);
 			check_db();
 			
 			bool success = false;
