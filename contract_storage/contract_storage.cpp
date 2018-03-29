@@ -33,37 +33,8 @@ namespace contract
 			return std::string("contract_storage_key_") + contract_id + "_" + storage_name;
 		}
 
-		static std::string make_event_id_prefix(const ContractCommitId& commit_id) {
-			return std::string("event$") + commit_id;
-		}
-
-		static std::string make_event_id(const ContractCommitId& commit_id, size_t index_in_commit)
-		{
-			return make_event_id_prefix(commit_id) + std::to_string(index_in_commit);
-		}
-
 		static std::string make_commit_events_key(const ContractCommitId& commit_id) {
 			return std::string("commit_events$") + commit_id;
-		}
-
-		static std::string make_commit_event_key_prefix_of_commit(const ContractCommitId& commit_id) {
-			return std::string("commit_event$") + commit_id + "$";
-		}
-
-		static std::string make_commit_event_key(const ContractCommitId& commit_id, const std::string& event_id)
-		{
-			return make_commit_event_key_prefix_of_commit(commit_id) + event_id;
-		}
-
-		static std::string make_transaction_event_key_prefix_of_transaction_id(const std::string& transaction_id) {
-			if (transaction_id.empty())
-				BOOST_THROW_EXCEPTION(ContractStorageException("empty transaction id error"));
-			return std::string("transaction_event$") + transaction_id + "$";
-		}
-
-		static std::string make_transaction_event_key(const std::string& transaction_id, const std::string& event_id)
-		{
-			return make_transaction_event_key_prefix_of_transaction_id(transaction_id) + event_id;
 		}
 
 		static std::string make_transaction_events_key(const std::string& transaction_id) {
@@ -644,28 +615,9 @@ namespace contract
 
 			// events save
 			auto transaction_events = std::make_shared<std::map<std::string, std::vector<ContractEventInfo>>>();
-			for (size_t i=0;i<changes->events.size();i++)
+			for (const auto& event_info : changes->events)
 			{
-				const auto& event_info = changes->events[i];
-				// let event_id => "event" + commit_id + index
-				// save {event_id} => event json info, event_commit_{commit_id}_{event_id} => event_id, event_transaction_{transaction_id}_{event_id} => event_id if transaction id not empty
-				const auto& event_id = make_event_id(commitId, i);
-				const auto& event_json = event_info.to_json();
-				if (!_db->Put(write_options, event_id, jsondiff::json_dumps(event_json)).ok()) {
-					BOOST_THROW_EXCEPTION(ContractStorageException("event info save error"));
-				}
-				changed_leveldb_keys.push_back(event_id);
-				const auto& commit_event_key = make_commit_event_key(commitId, event_id);
-				if (!_db->Put(write_options, commit_event_key, event_id).ok()) {
-					BOOST_THROW_EXCEPTION(ContractStorageException("event info save error"));
-				}
-				changed_leveldb_keys.push_back(commit_event_key);
 				if (!event_info.transaction_id.empty()) {
-					const auto& transaction_event_key = make_transaction_event_key(event_info.transaction_id, event_id);
-					if (!_db->Put(write_options, transaction_event_key, event_id).ok()) {
-						BOOST_THROW_EXCEPTION(ContractStorageException("event info save error"));
-					}
-					changed_leveldb_keys.push_back(transaction_event_key);
 					if (transaction_events->find(event_info.transaction_id) == transaction_events->end()) {
 						(*transaction_events)[event_info.transaction_id] = std::vector<ContractEventInfo>();
 					}
@@ -970,21 +922,9 @@ namespace contract
 						}
 					}
 					std::set<std::string> transaction_ids;
-					for (size_t j = 0; j < changes.events.size(); j++) {
-						const auto& event_info = changes.events[j];
-						const auto& event_id = make_event_id(i->commit_id, j);
-						const auto& commit_event_key = make_commit_event_key(i->commit_id, event_id);
-						if (!_db->Delete(write_options, commit_event_key).ok()) {
-							BOOST_THROW_EXCEPTION(ContractStorageException("rollback event info failed"));
-						}
-						changed_leveldb_keys.push_back(commit_event_key);
+					for (const auto& event_info : changes.events) {
 						if (!event_info.transaction_id.empty()) {
 							transaction_ids.insert(event_info.transaction_id);
-							const auto& transaction_event_key = make_transaction_event_key(event_info.transaction_id, event_id);
-							if (!_db->Delete(write_options, transaction_event_key).ok()) {
-								BOOST_THROW_EXCEPTION(ContractStorageException("rollback event info failed"));
-							}
-							changed_leveldb_keys.push_back(transaction_event_key);
 						}
 					}
 					{
