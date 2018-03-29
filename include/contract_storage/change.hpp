@@ -64,7 +64,10 @@ namespace contract
 			// TODO: chainsql changes
 
 			jsondiff::JsonObject to_json() const;
-			static ContractChanges from_json(jsondiff::JsonObject json_obj);
+			static ContractChanges from_json(const jsondiff::JsonObject& json_obj);
+
+			static jsondiff::JsonArray events_to_json(const std::vector<ContractEventInfo>& events);
+			static std::vector<ContractEventInfo> events_from_json(const jsondiff::JsonArray& events_json_array);
 		};
 		typedef std::shared_ptr<ContractChanges> ContractChangesP;
 

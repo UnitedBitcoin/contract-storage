@@ -106,12 +106,28 @@ namespace contract
 			return info;
 		}
 
+		jsondiff::JsonArray ContractChanges::events_to_json(const std::vector<ContractEventInfo>& events) {
+			jsondiff::JsonArray events_array;
+			for (const auto& event_info : events)
+			{
+				events_array.push_back(event_info.to_json());
+			}
+			return events_array;
+		}
+		std::vector<ContractEventInfo> ContractChanges::events_from_json(const jsondiff::JsonArray& events_json_array) {
+			std::vector<ContractEventInfo> events;
+			for (const auto& item : events_json_array)
+			{
+				events.push_back(ContractEventInfo::from_json(item.as<jsondiff::JsonObject>()));
+			}
+			return events;
+		}
+
 		jsondiff::JsonObject ContractChanges::to_json() const
 		{
 			jsondiff::JsonObject json_obj;
 			jsondiff::JsonArray balance_changes_array;
 			jsondiff::JsonArray storage_changes_array;
-			jsondiff::JsonArray events_array;
 			jsondiff::JsonArray upgrade_infos_array;
 			for (const auto &item : balance_changes)
 			{
@@ -123,11 +139,7 @@ namespace contract
 				storage_changes_array.push_back(item.to_json());
 			}
 			json_obj["storage_changes"] = storage_changes_array;
-			for (const auto& event_info : events)
-			{
-				events_array.push_back(event_info.to_json());
-			}
-			json_obj["events"] = events_array;
+			json_obj["events"] = events_to_json(events);
 			for (const auto& info : upgrade_infos)
 			{
 				upgrade_infos_array.push_back(info.to_json());
@@ -135,7 +147,7 @@ namespace contract
 			json_obj["upgrade_infos"] = upgrade_infos_array;
 			return json_obj;
 		}
-		ContractChanges ContractChanges::from_json(jsondiff::JsonObject json_obj)
+		ContractChanges ContractChanges::from_json(const jsondiff::JsonObject& json_obj)
 		{
 			ContractChanges changes;
 			const auto &balance_changes_array = json_obj["balance_changes"].as<jsondiff::JsonArray>();
@@ -151,10 +163,7 @@ namespace contract
 			if (json_obj.find("events") != json_obj.end())
 			{
 				const auto& events_array = json_obj["events"].as<jsondiff::JsonArray>();
-				for (const auto& item : events_array)
-				{
-					changes.events.push_back(ContractEventInfo::from_json(item.as<jsondiff::JsonObject>()));
-				}
+				changes.events = events_from_json(events_array);
 			}
 			if (json_obj.find("upgrade_infos") != json_obj.end())
 			{

@@ -36,6 +36,10 @@ namespace contract
 			return make_event_id_prefix(commit_id) + std::to_string(index_in_commit);
 		}
 
+		static std::string make_commit_events_key(const ContractCommitId& commit_id) {
+			return std::string("commit_events$") + commit_id;
+		}
+
 		static std::string make_commit_event_key_prefix_of_commit(const ContractCommitId& commit_id) {
 			return std::string("commit_event$") + commit_id + "$";
 		}
@@ -54,6 +58,10 @@ namespace contract
 		static std::string make_transaction_event_key(const std::string& transaction_id, const std::string& event_id)
 		{
 			return make_transaction_event_key_prefix_of_transaction_id(transaction_id) + event_id;
+		}
+
+		static std::string make_transaction_events_key(const std::string& transaction_id) {
+			return std::string("transaction_events$") + transaction_id;
 		}
 
 		static std::string make_contract_name_id_mapping_key(const std::string& contract_name)
@@ -477,24 +485,14 @@ namespace contract
 			};
 			leveldb::ReadOptions read_options;
 			read_options.snapshot = snapshot;
-			auto iter = _db->NewIterator(read_options);
-			BOOST_SCOPE_EXIT_ALL(&) {
-				delete iter;
-			};
-			const auto& prefix = make_event_id_prefix(commit_id);
-			iter->Seek(prefix);
-			while (iter->Valid()) {
-				std::string key = iter->key().ToString();
-				if (!boost::starts_with(key, prefix) || key == prefix) {
-					break;
+			const auto& commit_events_key = make_commit_events_key(commit_id);
+
+			std::string events_str_value;
+			if (_db->Get(read_options, commit_events_key, &events_str_value).ok()) {
+				const auto& json_obj = jsondiff::json_loads(events_str_value);
+				if (json_obj.is_array()) {
+					*events = ContractChanges::events_from_json(json_obj.as<jsondiff::JsonArray>());
 				}
-				std::string event_value = iter->value().ToString();
-				auto event_json = jsondiff::json_loads(event_value);
-				if (event_json.is_object()) {
-					const auto& event_info = ContractEventInfo::from_json(event_json.as<jsondiff::JsonObject>());
-					events->push_back(event_info);
-				}
-				iter->Next();
 			}
 			return events; 
 		}
@@ -509,27 +507,14 @@ namespace contract
 			};
 			leveldb::ReadOptions read_options;
 			read_options.snapshot = snapshot;
-			auto iter = _db->NewIterator(read_options);
-			BOOST_SCOPE_EXIT_ALL(&) {
-				delete iter;
-			};
-			const auto& prefix = make_transaction_event_key_prefix_of_transaction_id(transaction_id);
-			iter->Seek(prefix);
-			while (iter->Valid()) {
-				std::string key = iter->key().ToString();
-				if (!boost::starts_with(key, prefix) || key == prefix) {
-					break;
+
+			const auto& tx_events_key = make_transaction_events_key(transaction_id);
+			std::string value;
+			if (_db->Get(read_options, tx_events_key, &value).ok()) {
+				const auto& events_json = jsondiff::json_loads(value);
+				if (events_json.is_array()) {
+					*events = ContractChanges::events_from_json(events_json.as<jsondiff::JsonArray>());
 				}
-				std::string event_id = iter->value().ToString();
-				std::string event_value;
-				if (_db->Get(read_options, event_id, &event_value).ok()) {
-					auto event_json = jsondiff::json_loads(event_value);
-					if (event_json.is_object()) {
-						const auto& event_info = ContractEventInfo::from_json(event_json.as<jsondiff::JsonObject>());
-						events->push_back(event_info);
-					}
-				}
-				iter->Next();
 			}
 			return events;
 		}
@@ -650,6 +635,7 @@ namespace contract
 			}
 
 			// events save
+			auto transaction_events = std::make_shared<std::map<std::string, std::vector<ContractEventInfo>>>();
 			for (size_t i=0;i<changes->events.size();i++)
 			{
 				const auto& event_info = changes->events[i];
@@ -672,7 +658,30 @@ namespace contract
 						BOOST_THROW_EXCEPTION(ContractStorageException("event info save error"));
 					}
 					changed_leveldb_keys.push_back(transaction_event_key);
+					if (transaction_events->find(event_info.transaction_id) == transaction_events->end()) {
+						(*transaction_events)[event_info.transaction_id] = std::vector<ContractEventInfo>();
+					}
+					(*transaction_events)[event_info.transaction_id].push_back(event_info);
 				}
+			}
+
+			// commitId=>events
+			{
+				const auto& commit_events_key = make_commit_events_key(commitId);
+				const auto& events_json = ContractChanges::events_to_json(changes->events);
+				if (!_db->Put(write_options, commit_events_key, jsondiff::json_dumps(events_json)).ok()) {
+					BOOST_THROW_EXCEPTION(ContractStorageException("commit events save error"));
+				}
+				changed_leveldb_keys.push_back(commit_events_key);
+			}
+			// transactionId=>events
+			for (const auto& p : *transaction_events) {
+				const auto& tx_events_key = make_transaction_events_key(p.first);
+				const auto& tx_events_json = ContractChanges::events_to_json(p.second);
+				if (!_db->Put(write_options, tx_events_key, jsondiff::json_dumps(tx_events_json)).ok()) {
+					BOOST_THROW_EXCEPTION(ContractStorageException("commit events save error"));
+				}
+				changed_leveldb_keys.push_back(tx_events_key);
 			}
 
 			// upgrade infos
@@ -808,8 +817,6 @@ namespace contract
 			// rollback contracts info, contract balances, contract storages, upgrade infos and events
 			for (auto i = newerCommitInfos.begin(); i != newerCommitInfos.end(); i++)
 			{
-				// TODO: contract events rollback
-
 				if (i->change_type == CONTRACT_INFO_CHANGE_TYPE)
 				{
 					// contract info change rollback
@@ -954,6 +961,7 @@ namespace contract
 							changed_leveldb_keys.push_back(contract_name_id_mapping_key);
 						}
 					}
+					std::set<std::string> transaction_ids;
 					for (size_t j = 0; j < changes.events.size(); j++) {
 						const auto& event_info = changes.events[j];
 						const auto& event_id = make_event_id(i->commit_id, j);
@@ -963,12 +971,35 @@ namespace contract
 						}
 						changed_leveldb_keys.push_back(commit_event_key);
 						if (!event_info.transaction_id.empty()) {
+							transaction_ids.insert(event_info.transaction_id);
 							const auto& transaction_event_key = make_transaction_event_key(event_info.transaction_id, event_id);
-							if(!_db->Delete(write_options, transaction_event_key).ok()) {
+							if (!_db->Delete(write_options, transaction_event_key).ok()) {
 								BOOST_THROW_EXCEPTION(ContractStorageException("rollback event info failed"));
 							}
 							changed_leveldb_keys.push_back(transaction_event_key);
 						}
+					}
+					{
+						// transactionId=>events delete
+						for (const auto& txid : transaction_ids) {
+							const auto& tx_events_key = make_transaction_events_key(txid);
+							auto status = _db->Delete(write_options, tx_events_key);
+							if (!status.ok() && !status.IsNotFound()) {
+								BOOST_THROW_EXCEPTION(ContractStorageException("rollback commit events failed"));
+							}
+							if (status.ok())
+								changed_leveldb_keys.push_back(tx_events_key);
+						}
+					}
+					{
+						// events key delete
+						const auto& commit_events_key = make_commit_events_key(i->commit_id);
+						auto delete_commit_events_key_status = _db->Delete(write_options, commit_events_key);
+						if (!delete_commit_events_key_status.ok() && !delete_commit_events_key_status.IsNotFound()) {
+							BOOST_THROW_EXCEPTION(ContractStorageException("rollback commit events failed"));
+						}
+						if (delete_commit_events_key_status.ok())
+							changed_leveldb_keys.push_back(commit_events_key);
 					}
 				}
 				else
