@@ -1,4 +1,7 @@
 #include <contract_storage/contract_storage.hpp>
+#include <thread>
+#include <chrono>
+#include <iostream>
 
 using namespace contract::storage;
 using namespace jsondiff;
@@ -14,7 +17,29 @@ int main(int argc, char **argv)
 {
 	// you need delete old test data to run this testcase
 	JsonDiff differ;
-	ContractStorageService service(123, "test_leveldb.db", "test_sql_db.db");
+	uint32_t magic_num = 123;
+	std::string db_path("test_leveldb.db");
+	std::string sqldb_path("test_sql_db.db");
+	
+	std::thread t1([&]() {
+		auto service1 = ContractStorageService::get_instance(magic_num, db_path, sqldb_path);
+		for (size_t i = 0; i < 20; i++) {
+			std::cout << i << std::endl;
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
+	});
+	std::thread t2([&]() {
+		auto service2 = ContractStorageService::get_instance(magic_num, db_path, sqldb_path);
+		for (size_t i = 20; i < 40; i++) {
+			std::cout << i << std::endl;
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
+	});
+	t1.join();
+	t2.join();
+
+	ContractStorageService service(magic_num, db_path, sqldb_path, false);
+	service.open();
 	service.clear_sql_db(); // for test usage
 	auto contract_info = std::make_shared<ContractInfo>();
 	contract_info->id = "c1";

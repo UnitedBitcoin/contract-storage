@@ -12,6 +12,7 @@
 #include <fc/crypto/sha256.hpp>
 #include <boost/uuid/sha1.hpp>
 #include <exception>
+#include <memory>
 #include <leveldb/db.h>
 #include <sqlite3.h>
 
@@ -19,7 +20,7 @@ namespace contract
 {
 	namespace storage
 	{
-		class ContractStorageService
+		class ContractStorageService final
 		{
 		private:
 			leveldb::DB *_db;
@@ -29,12 +30,16 @@ namespace contract
 			std::string _storage_db_path;
 			std::string _storage_sql_db_path;
 		public:
-			ContractStorageService(uint32_t magic_number, const std::string& storage_db_path, const std::string& storage_sql_db_path);
+			// suggest use get_instance
+			ContractStorageService(uint32_t magic_number, const std::string& storage_db_path, const std::string& storage_sql_db_path, bool auto_open = true);
 			~ContractStorageService();
+
+			static std::shared_ptr<ContractStorageService> get_instance(uint32_t magic_number, const std::string& storage_db_path, const std::string& storage_sql_db_path);
 			
 			// these apis may throws boost::exception
 			void open();
 			void close();
+			bool is_open() const;
 
 			ContractInfoP get_contract_info(const AddressType& contract_id) const;
 			ContractCommitId save_contract_info(ContractInfoP contract_info);

@@ -13,7 +13,8 @@ storage component for blockchain contract to manage contract bytecode, contract 
 
 # Features
 
-* manage contracts info and balances
-* manage contract commits(balances and storages changes)
+* manage contracts info, balances, storages, events, etc.
+* manage contract commits(changes of base info, balances, storages, events, etc.)
 * manage contract operation rollback
 * root state hash as commit-id
+* reset current root state hash(looks like git's reset HEAD commit feature)

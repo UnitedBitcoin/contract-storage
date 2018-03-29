@@ -12,6 +12,8 @@
 #include <map>
 #include <mutex>
 
+// TODO: use a single embedded document database to store all data
+
 namespace contract
 {
 	namespace storage
@@ -46,14 +48,26 @@ namespace contract
 			return std::string("contract_name_id_mapping_") + contract_name;
 		}
 
-		ContractStorageService::ContractStorageService(uint32_t magic_number, const std::string& storage_db_path, const std::string& storage_sql_db_path)
+		ContractStorageService::ContractStorageService(uint32_t magic_number, const std::string& storage_db_path, const std::string& storage_sql_db_path, bool auto_open)
 			: _db(nullptr), _sql_db(nullptr), _magic_number(magic_number), _storage_db_path(storage_db_path), _storage_sql_db_path(storage_sql_db_path)
 		{
-			open();
+			if(auto_open)
+				open();
 		}
 		ContractStorageService::~ContractStorageService()
 		{
 			close();
+		}
+
+		std::shared_ptr<ContractStorageService> ContractStorageService::get_instance(uint32_t magic_number, const std::string& storage_db_path, const std::string& storage_sql_db_path)
+		{
+			static ContractStorageService service_instance(magic_number, storage_db_path, storage_sql_db_path, false);
+			storage_mutex.lock();
+			service_instance.open();
+			return std::shared_ptr<ContractStorageService>(&service_instance, [&](ContractStorageService* ptr) {
+				ptr->close();
+				storage_mutex.unlock();
+			});
 		}
 
 		void ContractStorageService::open()
@@ -88,6 +102,11 @@ namespace contract
 			}
 		}
 
+		bool ContractStorageService::is_open() const
+		{
+			return _db ? true : false;
+		}
+
 		static int empty_sql_callback(void *notUsed, int argc, char **argv, char **colNames)
 		{
 			return 0;
@@ -95,9 +114,7 @@ namespace contract
 
 		void ContractStorageService::init_commits_table()
 		{
-			std::lock_guard<std::recursive_mutex> lock(storage_mutex);
 			char *errMsg;
-			// TODO: auto generate bigint id auto increment, maybe need use a new config table. or use GUID as id
 			auto status = sqlite3_exec(_sql_db, "CREATE TABLE IF NOT EXISTS commit_info (id INTEGER PRIMARY KEY, commit_id varchar(255) not null, change_type varchar(50) not null, contract_id varchar(255))",
 				&empty_sql_callback, nullptr, &errMsg);
 			if (status != SQLITE_OK)
@@ -319,11 +336,8 @@ namespace contract
 			return state_hash;
 		}
 
-		// TODO: only use leveldb and use leveldb transaction
-
 		ContractCommitId ContractStorageService::save_contract_info(ContractInfoP contract_info)
 		{
-			std::lock_guard<std::recursive_mutex> lock(storage_mutex);
 			check_db();
 			bool success = false;
 			leveldb::WriteOptions write_options;
@@ -500,7 +514,6 @@ namespace contract
 
 		void ContractStorageService::clear_sql_db()
 		{
-			std::lock_guard<std::recursive_mutex> lock(storage_mutex);
 			check_db();
 			char *err_msg;
 			auto drop_status = sqlite3_exec(_sql_db, "delete from commit_info", &empty_sql_callback, nullptr, &err_msg);
@@ -515,7 +528,6 @@ namespace contract
 		// save commit history with all diffs
 		ContractCommitId ContractStorageService::commit_contract_changes(ContractChangesP changes)
 		{
-			std::lock_guard<std::recursive_mutex> lock(storage_mutex);
 			check_db();
 			leveldb::ReadOptions read_options;
 			leveldb::WriteOptions write_options;
@@ -983,7 +995,6 @@ namespace contract
 
 		void ContractStorageService::rollback_contract_state(const ContractCommitId& dest_commit_id)
 		{
-			std::lock_guard<std::recursive_mutex> lock(storage_mutex);
 			check_db();
 			
 			bool success = false;
