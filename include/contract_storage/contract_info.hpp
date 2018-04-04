@@ -30,6 +30,9 @@ namespace contract
 			AddressType id;
 			AddressType creator_address;
 			// TODO: tx id where contract created in
+			std::string txid; // tx id where contract created in
+			bool is_native = false; // whether this is native contract
+
 			std::string name;
 			std::string description;
 			uint32_t version = 0;
