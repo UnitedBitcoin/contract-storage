@@ -43,6 +43,7 @@ namespace contract
 			json_obj["description"] = description;
 			json_obj["txid"] = txid;
 			json_obj["is_native"] = is_native;
+			json_obj["contract_template_key"] = contract_template_key;
 			json_obj["apis"] = apis;
 			json_obj["offline_apis"] = offline_apis;
 			JsonArray storages_array;
@@ -87,6 +88,8 @@ namespace contract
 					contract_info->txid = json_obj["txid"].as_string();
 				if (json_obj.find("is_native") != json_obj.end())
 					contract_info->is_native = json_obj["is_native"].as_bool();
+				if (json_obj.find("contract_template_key") != json_obj.end())
+					contract_info->contract_template_key = json_obj["contract_template_key"].as_string();
 				if (json_obj.find("creator_address") != json_obj.end())
 					contract_info->creator_address = json_obj["creator_address"].as_string();
 				auto bytecode_base64 = json_obj["bytecode"].as_string();

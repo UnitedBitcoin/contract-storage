@@ -32,6 +32,7 @@ namespace contract
 			// TODO: tx id where contract created in
 			std::string txid; // tx id where contract created in
 			bool is_native = false; // whether this is native contract
+			std::string contract_template_key; // only need when this contract is created from template
 
 			std::string name;
 			std::string description;
