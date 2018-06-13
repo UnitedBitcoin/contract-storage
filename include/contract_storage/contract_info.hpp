@@ -5,7 +5,7 @@
 #include <memory>
 #include <cinttypes>
 #include <jsondiff/jsondiff.h>
-#include <fc/crypto/sha256.hpp>
+#include <fcrypto/sha256.hpp>
 
 namespace contract
 {
@@ -29,7 +29,7 @@ namespace contract
 			std::vector<unsigned char> bytecode;
 			AddressType id;
 			AddressType creator_address;
-			// TODO: tx id where contract created in
+			
 			std::string txid; // tx id where contract created in
 			bool is_native = false; // whether this is native contract
 			std::string contract_template_key; // only need when this contract is created from template
@@ -47,7 +47,7 @@ namespace contract
 		};
 		typedef std::shared_ptr<ContractInfo> ContractInfoP;
 
-		fc::sha256 ordered_json_digest(const jsondiff::JsonValue& json_value);
+		fcrypto::sha256 ordered_json_digest(const jsondiff::JsonValue& json_value);
 		
 	}
 }

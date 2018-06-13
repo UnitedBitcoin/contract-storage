@@ -5,11 +5,11 @@
 #include <contract_storage/commit.hpp>
 #include <contract_storage/change.hpp>
 #include <boost/exception/all.hpp>
-#include <fc/array.hpp>
-#include <fc/crypto/ripemd160.hpp>
-#include <fc/crypto/elliptic.hpp>
-#include <fc/crypto/base58.hpp>
-#include <fc/crypto/sha256.hpp>
+#include <fjson/array.hpp>
+#include <fcrypto/ripemd160.hpp>
+#include <fcrypto/elliptic.hpp>
+#include <fcrypto/base58.hpp>
+#include <fcrypto/sha256.hpp>
 #include <boost/uuid/sha1.hpp>
 #include <exception>
 #include <memory>
@@ -91,11 +91,11 @@ namespace contract
 			std::string get_value_by_key_or_error(const std::string &key);
 			jsondiff::JsonValue get_json_value_by_key_or_null(const std::string &key);
 
-			ContractCommitId generate_next_root_hash(const std::string& old_root_state_hash, const fc::sha256& diff_hash) const;
+			ContractCommitId generate_next_root_hash(const std::string& old_root_state_hash, const fcrypto::sha256& diff_hash) const;
 
 			// calculate new-contract-info commit
-			fc::sha256 hash_new_contract_info_commit(ContractInfoP contract_info) const;
-			fc::sha256 hash_contract_changes(ContractChangesP changes) const;
+			fcrypto::sha256 hash_new_contract_info_commit(ContractInfoP contract_info) const;
+			fcrypto::sha256 hash_contract_changes(ContractChangesP changes) const;
 		};
 	}
 }

@@ -1,9 +1,9 @@
 #include <contract_storage/contract_storage.hpp>
 #include <contract_storage/config.hpp>
 #include <contract_storage/exceptions.hpp>
-#include <fc/io/json.hpp>
-#include <fc/string.hpp>
-#include <fc/crypto/base64.hpp>
+#include <fjson/io/json.hpp>
+#include <fjson/string.hpp>
+#include <fjson/crypto/base64.hpp>
 #include <boost/scope_exit.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -217,12 +217,12 @@ namespace contract
 			return jsondiff::json_loads(value);
 		}
 
-		fc::sha256 ContractStorageService::hash_new_contract_info_commit(ContractInfoP contract_info) const
+		fcrypto::sha256 ContractStorageService::hash_new_contract_info_commit(ContractInfoP contract_info) const
 		{
 			return ordered_json_digest(contract_info->to_json());
 		}
 
-		fc::sha256 ContractStorageService::hash_contract_changes(ContractChangesP changes) const
+		fcrypto::sha256 ContractStorageService::hash_contract_changes(ContractChangesP changes) const
 		{
 			return ordered_json_digest(changes->to_json());
 		}
@@ -738,9 +738,9 @@ namespace contract
 			return EMPTY_COMMIT_ID;
 		}
 
-		ContractCommitId ContractStorageService::generate_next_root_hash(const std::string& old_root_state_hash, const fc::sha256& diff_hash) const
+		ContractCommitId ContractStorageService::generate_next_root_hash(const std::string& old_root_state_hash, const fcrypto::sha256& diff_hash) const
 		{
-			return fc::sha256::hash(old_root_state_hash + diff_hash.str() + std::to_string(_current_block_height)).str();
+			return fcrypto::sha256::hash(old_root_state_hash + diff_hash.str() + std::to_string(_current_block_height)).str();
 		}
 
 		void ContractStorageService::reset_root_state_hash(const ContractCommitId& dest_commit_id)

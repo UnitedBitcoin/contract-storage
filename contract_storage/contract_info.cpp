@@ -1,10 +1,11 @@
 #include <contract_storage/contract_info.hpp>
-#include <fc/array.hpp>
-#include <fc/crypto/ripemd160.hpp>
-#include <fc/crypto/elliptic.hpp>
-#include <fc/crypto/base58.hpp>
-#include <fc/crypto/base64.hpp>
-#include <fc/crypto/sha256.hpp>
+#include <fjson/array.hpp>
+#include <fcrypto/ripemd160.hpp>
+#include <fcrypto/elliptic.hpp>
+#include <openssl/sha.h>
+#include <fcrypto/base58.hpp>
+#include <fjson/crypto/base64.hpp>
+#include <fcrypto/sha256.hpp>
 #include <boost/uuid/sha1.hpp>
 #include <memory>
 #include <list>
@@ -64,7 +65,7 @@ namespace contract
 				balances_array.push_back(balance.to_json());
 			}
 			json_obj["balances"] = balances_array;
-			auto bytecode_base64 = fc::base64_encode(bytecode.data(), bytecode.size());
+			auto bytecode_base64 = fjson::base64_encode(bytecode.data(), bytecode.size());
 			json_obj["bytecode"] = bytecode_base64;
 			return json_obj;
 		}
@@ -93,7 +94,7 @@ namespace contract
 				if (json_obj.find("creator_address") != json_obj.end())
 					contract_info->creator_address = json_obj["creator_address"].as_string();
 				auto bytecode_base64 = json_obj["bytecode"].as_string();
-				auto bytecode_str = fc::base64_decode(bytecode_base64);
+				auto bytecode_str = fjson::base64_decode(bytecode_base64);
 				contract_info->bytecode.resize(bytecode_str.size());
 				memcpy(contract_info->bytecode.data(), bytecode_str.c_str(), bytecode_str.size());
 				auto apis_json_array = json_obj["apis"].as<JsonArray>();
@@ -112,7 +113,7 @@ namespace contract
 					for (size_t i = 0; i < storage_types_json_array.size(); i++)
 					{
 						auto item_json = storage_types_json_array[i].as<JsonArray>();
-						FC_ASSERT(item_json.size() >= 2, "contract info format error");
+						FJSON_ASSERT(item_json.size() >= 2, "contract info format error");
 						contract_info->storage_types[item_json[0].as_string()] = item_json[1].as_uint64();
 					}
 				}
@@ -151,7 +152,7 @@ namespace contract
 		}
 
 
-		// Èç¹û²ÎÊýÊÇjson object£¬×ª»»³Éjson array£¬²¢ÇÒjson object/json arrayµÄÔªËØÖÐÒ²µÝ¹é´¦Àí
+		// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½json objectï¿½ï¿½×ªï¿½ï¿½ï¿½ï¿½json arrayï¿½ï¿½ï¿½ï¿½ï¿½ï¿½json object/json arrayï¿½ï¿½Ôªï¿½ï¿½ï¿½ï¿½Ò²ï¿½Ý¹é´¦ï¿½ï¿½
 		static jsondiff::JsonValue nested_json_object_to_array(const jsondiff::JsonValue& json_value)
 		{
 			if (json_value.is_object())
@@ -186,10 +187,26 @@ namespace contract
 			return json_value;
 		}
 
-		fc::sha256 ordered_json_digest(const jsondiff::JsonValue& json_value)
+		static void sha256(char *string, char outputBuffer[65])
+		{
+			unsigned char hash[SHA256_DIGEST_LENGTH];
+			SHA256_CTX sha256;
+			SHA256_Init(&sha256);
+			SHA256_Update(&sha256, string, strlen(string));
+			SHA256_Final(hash, &sha256);
+			int i = 0;
+			for (i = 0; i < SHA256_DIGEST_LENGTH; i++)
+			{
+				sprintf(outputBuffer + (i * 2), "%02x", hash[i]);
+			}
+			outputBuffer[64] = 0;
+		}
+
+		fcrypto::sha256 ordered_json_digest(const jsondiff::JsonValue& json_value)
 		{
 			const auto& parsed_json = nested_json_object_to_array(json_value);
-			return fc::sha256::hash(json_dumps(parsed_json));
+			const auto& dumped = json_dumps(parsed_json);
+			return fcrypto::sha256::hash(dumped);
 		}
 	}
 }

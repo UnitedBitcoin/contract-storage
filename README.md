@@ -7,7 +7,6 @@ storage component for blockchain contract to manage contract bytecode, contract 
 * boost 1.55
 * leveldb
 * sqlite3
-* https://github.com/cryptonomex/fc
 * https://github.com/BlockLink/jsondiff-cpp
 * OpenSSL
 
