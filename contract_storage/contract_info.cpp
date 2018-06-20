@@ -45,10 +45,21 @@ namespace contract
 			json_obj["txid"] = txid;
 			json_obj["is_native"] = is_native;
 			json_obj["contract_template_key"] = contract_template_key;
-			json_obj["apis"] = apis;
-			json_obj["offline_apis"] = offline_apis;
+
+			std::vector<std::string> ordered_apis(apis.begin(), apis.end());
+			std::sort(ordered_apis.begin(), ordered_apis.end(), std::less<std::string>());
+			json_obj["apis"] = ordered_apis;
+
+			std::vector<std::string> ordered_offline_apis(offline_apis.begin(), offline_apis.end());
+			std::sort(ordered_offline_apis.begin(), ordered_offline_apis.end(), std::less<std::string>());
+			json_obj["offline_apis"] = ordered_offline_apis;
+
 			JsonArray storages_array;
-			for(const auto& p : storage_types)
+
+			// sort storages_array by name
+			std::map<std::string, uint32_t, std::less<std::string>> ordered_storage_types(storage_types.begin(), storage_types.end());
+
+			for(const auto& p : ordered_storage_types)
 			{
 				JsonArray item_array;
 				item_array.push_back(p.first);
@@ -57,14 +68,19 @@ namespace contract
 			}
 			json_obj["storage_types"] = storages_array;
 
+			std::vector<ContractBalance> ordered_balances(balances.begin(), balances.end());
+			std::sort(ordered_balances.begin(), ordered_balances.end(), [](const ContractBalance& a, const ContractBalance& b) {
+				return a.asset_id - b.asset_id;
+			});
 			JsonArray balances_array;
-			for (const auto &balance : balances)
+			for (const auto &balance : ordered_balances)
 			{
 				if (balance.amount == 0)
 					continue;
 				balances_array.push_back(balance.to_json());
 			}
 			json_obj["balances"] = balances_array;
+
 			auto bytecode_base64 = fjson::base64_encode(bytecode.data(), bytecode.size());
 			json_obj["bytecode"] = bytecode_base64;
 			return json_obj;

@@ -2,6 +2,7 @@
 #include <thread>
 #include <chrono>
 #include <iostream>
+#include <fcrypto/base58.hpp>
 
 using namespace contract::storage;
 using namespace jsondiff;
@@ -127,6 +128,13 @@ int main(int argc, char **argv)
 	auto name_storage_after_rollback2 = service->get_contract_storage(contract_info->id, "name").as_string();
 	assert(name_storage_after_rollback2 == "");
 
+	{
+		std::string hello("hello world");
+		auto hello_base58 = fcrypto::to_base58(hello.c_str(), hello.size());
+		auto hello_decodefrom58 = fcrypto::from_base58(hello_base58);
+		auto hello_str_decoded = std::string(hello_decodefrom58.begin(), hello_decodefrom58.end());
+		assert(hello_str_decoded == hello);
+	}
 
 	return 0;
 }
