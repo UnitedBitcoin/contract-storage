@@ -76,6 +76,7 @@ namespace contract
 			uint32_t current_block_height() const { return _current_block_height; }
 			void set_current_block_height(uint32_t block_height) { this->_current_block_height = block_height; }
 
+			ContractCommitInfoP get_commit_info(const ContractCommitId& commit_id) const;
 		private:
 			// check db opened? if not, throw boost::exception
 			void check_db() const;
@@ -86,7 +87,6 @@ namespace contract
 			void rollback_to_root_state_hash_without_transactional(const ContractCommitId& dest_commit_id, std::vector<std::string>& changed_leveldb_keys);
 			// init commits sql table
 			void init_commits_table();
-			ContractCommitInfoP get_commit_info(const ContractCommitId& commit_id) const;
 			// add commit info to sql db
 			void add_commit_info(ContractCommitId commit_id, const std::string &change_type, const std::string &diff_str, const std::string &contract_id);
 			// get value from key-value db by key
