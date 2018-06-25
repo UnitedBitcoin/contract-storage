@@ -78,6 +78,11 @@ int main(int argc, char **argv)
 	auto commit_id_before_commit2 = commit1_after_change_contract_desc;
 	auto commit2 = service->commit_contract_changes(changes1);
 
+
+
+	assert(service->is_current_root_state_hash_after(commit1));
+	assert(service->is_current_root_state_hash_after(EMPTY_COMMIT_ID));
+
 	// get balance and storage after commit
 	auto balances_after_commit_changes1 = service->get_contract_balances(contract_info->id);
 	assert(balances_after_commit_changes1.size() == 1 && balances_after_commit_changes1[0].amount == 100 && balances_after_commit_changes1[0].asset_id == 0);
@@ -90,6 +95,9 @@ int main(int argc, char **argv)
 
 	// rollback
 	service->rollback_contract_state(commit_id_before_commit2);
+
+	assert(!service->is_current_root_state_hash_after(commit2));
+
 	const auto& contract_info_after_rollbacked_to_commit_id_before_commit2 = service->get_contract_info(contract_info->id);
 
 	auto commit2_again = service->commit_contract_changes(changes1);

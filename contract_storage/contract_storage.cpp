@@ -147,7 +147,7 @@ namespace contract
 			return 0;
 		}
 
-		ContractCommitInfoP ContractStorageService::get_commit_info(const ContractCommitId& commit_id)
+		ContractCommitInfoP ContractStorageService::get_commit_info(const ContractCommitId& commit_id) const
 		{
 			check_db();
 			char *errMsg;
@@ -323,7 +323,7 @@ namespace contract
 				return "";
 		}
 
-		std::string ContractStorageService::current_root_state_hash() const
+		ContractCommitId ContractStorageService::current_root_state_hash() const
 		{
 			check_db();
 			leveldb::ReadOptions read_options;
@@ -331,6 +331,27 @@ namespace contract
 			if (!_db->Get(read_options, root_state_hash_key, &state_hash).ok())
 				state_hash = EMPTY_COMMIT_ID;
 			return state_hash;
+		}
+
+		bool ContractStorageService::is_current_root_state_hash_after(const ContractCommitId& other_root_state_hash) const
+		{
+			check_db();
+			auto cur_commit_id = current_root_state_hash();
+			if (cur_commit_id == EMPTY_COMMIT_ID) {
+				return false;
+			}
+			if (other_root_state_hash == EMPTY_COMMIT_ID)
+				return true;
+			const auto& cur_commit_info = get_commit_info(cur_commit_id);
+			if (!cur_commit_info && cur_commit_id != EMPTY_COMMIT_ID)
+				BOOST_THROW_EXCEPTION(ContractStorageException(std::string("Can't find commit ") + cur_commit_id));
+			const auto& other_commit_info = get_commit_info(other_root_state_hash);
+			if (!other_commit_info && other_root_state_hash != EMPTY_COMMIT_ID)
+				return false;
+			if (cur_commit_info->id > other_commit_info->id)
+				return true;
+			else
+				return false;
 		}
 
 		ContractCommitId ContractStorageService::top_root_state_hash() const

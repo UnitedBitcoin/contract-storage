@@ -59,7 +59,9 @@ namespace contract
 
 			// hash the all contract-storage world
 			// new-root-hash = hash(old-root-hash, commit-diff, block_height)
-			std::string current_root_state_hash() const;
+			ContractCommitId current_root_state_hash() const;
+			// whethe other_root_state_hash in history to current_root_state_hash
+			bool is_current_root_state_hash_after(const ContractCommitId& other_root_state_hash) const;
 
 			// check whether haven't pending reset root state hash
 			bool is_latest() const;
@@ -84,7 +86,7 @@ namespace contract
 			void rollback_to_root_state_hash_without_transactional(const ContractCommitId& dest_commit_id, std::vector<std::string>& changed_leveldb_keys);
 			// init commits sql table
 			void init_commits_table();
-			ContractCommitInfoP get_commit_info(const ContractCommitId& commit_id);
+			ContractCommitInfoP get_commit_info(const ContractCommitId& commit_id) const;
 			// add commit info to sql db
 			void add_commit_info(ContractCommitId commit_id, const std::string &change_type, const std::string &diff_str, const std::string &contract_id);
 			// get value from key-value db by key
