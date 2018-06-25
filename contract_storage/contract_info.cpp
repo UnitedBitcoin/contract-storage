@@ -168,7 +168,7 @@ namespace contract
 		}
 
 
-		// ���������json object��ת����json array������json object/json array��Ԫ����Ҳ�ݹ鴦��
+		// parse arg to json_array when it's json object. otherwhile return itself. And recursively process child elements
 		static jsondiff::JsonValue nested_json_object_to_array(const jsondiff::JsonValue& json_value)
 		{
 			if (json_value.is_object())

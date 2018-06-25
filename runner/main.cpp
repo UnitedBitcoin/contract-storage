@@ -107,6 +107,7 @@ int main(int argc, char **argv)
 	assert(service->get_contract_info(contract_info->id)->name == "");
 
 	auto current_commit_id_after_rollback1 = service->current_root_state_hash();
+	assert(current_commit_id_after_rollback1 == "0055314d90bd9aaa6b415106283928f9c06fb0d6ca5de5ce642a6dd520ff3b75");
 
 	// get balance and storage after rollback
 	auto balances_after_rollback1 = service->get_contract_balances(contract_info->id);

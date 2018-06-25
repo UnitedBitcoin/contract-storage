@@ -25,7 +25,7 @@ namespace contract
 		private:
 			leveldb::DB *_db;
 			sqlite3 *_sql_db;
-			uint32_t _current_block_height = 0; // TODO: set/get current block height
+			uint32_t _current_block_height = 0;
 			uint32_t _magic_number;
 			std::string _storage_db_path;
 			std::string _storage_sql_db_path;
