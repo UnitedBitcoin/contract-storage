@@ -571,6 +571,9 @@ namespace contract
 				rollback_to_root_state_hash_without_transactional(old_root_state_hash, changed_leveldb_keys);
 				assert(current_root_state_hash() == old_root_state_hash);
 			}
+			if (changes->empty()) {
+				return old_root_state_hash;
+			}
 			const auto& root_state_hash = generate_next_root_hash(old_root_state_hash, hash_contract_changes(changes));
 			ContractCommitId commitId = root_state_hash;
 			// check commitId not conflict

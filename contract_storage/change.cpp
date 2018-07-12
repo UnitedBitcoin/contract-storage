@@ -147,6 +147,11 @@ namespace contract
 			json_obj["upgrade_infos"] = upgrade_infos_array;
 			return json_obj;
 		}
+
+		bool ContractChanges::empty() const {
+			return balance_changes.empty() && storage_changes.empty() && events.empty() && upgrade_infos.empty();
+		}
+
 		ContractChanges ContractChanges::from_json(const jsondiff::JsonObject& json_obj)
 		{
 			ContractChanges changes;
